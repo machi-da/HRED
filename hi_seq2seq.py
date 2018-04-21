@@ -1,7 +1,6 @@
 import chainer
 from chainer import links as L
 from chainer import functions as F
-import sys
 
 
 class EndLoop(Exception):

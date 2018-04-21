@@ -18,16 +18,17 @@ from sent_decoder import SentDec
 def parse_args():
     parser = argparse.ArgumentParser()
     """model parameters"""
-    parser.add_argument('--embed', type=int, default=100)
-    parser.add_argument('--hidden', type=int, default=200)
-    parser.add_argument('--layers', type=int, default=2)
+    parser.add_argument('--embed', type=int, default=216)
+    parser.add_argument('--hidden', type=int, default=216)
+    parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.2)
+    parser.add_argument('--bidirectional', '-bi', action='store_true')
     # parser.add_argument('--weightdecay', type=float, default=1.0e-6)
     # parser.add_argument('--gradclip', type=float, default=3.0)
     """train details"""
     parser.add_argument('--batch', '-b', type=int, default=32)
     parser.add_argument('--epoch', '-e', type=int, default=20)
-    parser.add_argument('--interval', '-i', type=int, default=500)
+    parser.add_argument('--interval', '-i', type=int, default=10000)
     parser.add_argument('--gpu', '-g', type=int, default=-1)
     parser.add_argument('--out', '-o', type=str, default='result/')
     args = parser.parse_args()
@@ -41,6 +42,7 @@ def main():
     hidden_size = args.hidden
     n_layers = args.layers
     dropout_ratio = args.dropout
+    bidirectional = args.bidirectional
     gpu_id = args.gpu
     n_epoch = args.epoch
     batch_size = args.batch
@@ -65,7 +67,7 @@ def main():
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
-    logger.info('----------')
+    logger.info('[Training start]')
     logger.info('logging to {0}'.format(out_dir + 'log.txt'))
     """DATASET"""
     base_dir = '/home/lr/machida/yahoo/sentword/'
@@ -75,11 +77,11 @@ def main():
     valid_trg = base_dir + 'ans_best.txt.sent.word.valid'
 
     # base_dir = '/home/lr/machida/yahoo/summarization/'
-    # base_dir = '/Users/machida/work/yahoo/'
-    # train_src = base_dir + 'que'
-    # train_trg = base_dir + 'ans'
-    # valid_src = base_dir + 'que'
-    # valid_trg = base_dir + 'ans'
+    base_dir = '/Users/machida/work/yahoo/'
+    train_src = base_dir + 'que'
+    train_trg = base_dir + 'ans'
+    valid_src = base_dir + 'que'
+    valid_trg = base_dir + 'ans'
 
     src = dataset.load(train_src)
     trg = dataset.load(train_trg)
@@ -93,8 +95,7 @@ def main():
     # src = src[:100000]
     # trg = trg[:100000]
 
-    logger.info('train size: {0}'.format(len(src)))
-    logger.info('valid size: {0}'.format(len(src_valid)))
+    logger.info('train size: {0}, valid size: {1}'.format(len(src), len(src_valid)))
 
     logger.info('Build vocabulary')
     init_vocab = {'<unk>': 0, '<sos>': 1, '<eos>': 2, '<sod>': 3, '<eod>': 4}
@@ -103,15 +104,15 @@ def main():
     logger.info('vocab size: {0}'.format(len(vocab)))
 
     train = dataset.convert2label(src, trg, vocab)
-    val   = dataset.convert2label(src_valid, trg_valid, vocab)
+    valid = dataset.convert2label(src_valid, trg_valid, vocab)
 
-    train_iter = iterator.Iterator(train, batch_size, padding=True)
-    val_iter   = iterator.Iterator(val  , batch_size, repeat=False, shuffle=False)
+    train_iter = iterator.Iterator(train, batch_size, shuffle=False)
+    valid_iter = iterator.Iterator(valid, batch_size, repeat=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
         WordEnc(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
         WordDec(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
-        SentEnc(hidden_size, n_layers, dropout_ratio),
+        SentEnc(hidden_size, n_layers, dropout_ratio, bidirectional=bidirectional),
         SentDec(hidden_size, n_layers, dropout_ratio),
         vocab['<sos>'], vocab['<eos>'], vocab['<sod>'], vocab['<eod>'])
     """OPTIMIZER"""
@@ -134,12 +135,12 @@ def main():
         data = converter.convert(batch, gpu_id)
         loss = optimizer.target(*data)
         count += 1
-        sum_loss += loss.data
+        sum_loss += loss.data / len(batch)
         optimizer.target.cleargrads()
         loss.backward()
         optimizer.update()
-        if train_iter.iteration % interval == 0:  # log per 100 iteration
-            logger.info('iteration:{0}, loss:{1}'.format(train_iter.iteration, sum_loss / interval))
+        if train_iter.iteration % interval == 0:
+            logger.info('iteration:{0}, loss:{1}'.format(train_iter.iteration, sum_loss))
             count = 0
             sum_loss = 0
         if train_iter.is_new_epoch:  # log per 1 epoch
@@ -150,8 +151,8 @@ def main():
         """EVALUATE"""
         if train_iter.is_new_epoch:
             val_loss = 0
-            val_iter.reset()
-            for batch in val_iter:
+            valid_iter.reset()
+            for batch in valid_iter:
                 data = converter.convert(batch, gpu_id)
                 with chainer.using_config('train', False):
                     val_loss += optimizer.target(*data).data

@@ -15,28 +15,34 @@ from sent_encoder import SentEnc
 from sent_decoder import SentDec
 
 
-def main():
-    """ARGUMENT"""
+def parse_args():
     parser = argparse.ArgumentParser()
     """model parameters"""
-    parser.add_argument('--embed', type=int, default=100)
-    parser.add_argument('--hidden', type=int, default=200)
-    parser.add_argument('--layers', type=int, default=2)
+    parser.add_argument('--embed', type=int, default=216)
+    parser.add_argument('--hidden', type=int, default=216)
+    parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.2)
-    #parser.add_argument('--weightdecay', type=float, default=1.0e-6)
-    #parser.add_argument('--gradclip', type=float, default=3.0)
+    parser.add_argument('--bidirectional', '-bi', action='store_true')
+    # parser.add_argument('--weightdecay', type=float, default=1.0e-6)
+    # parser.add_argument('--gradclip', type=float, default=3.0)
     """train details"""
-    parser.add_argument('--batch', '-b', type=int, default=3)
+    parser.add_argument('--batch', '-b', type=int, default=32)
     parser.add_argument('--gpu', '-g', type=int, default=-1)
     parser.add_argument('--model', '-m', type=str, required=True)
     parser.add_argument('--vocab', '-v', type=str, required=True)
     parser.add_argument('--out', '-o', type=str, default='result/')
     args = parser.parse_args()
+    return args
+
+
+def main():
+    args = parse_args()
     """PARAMETER"""
     embed_size = args.embed
     hidden_size = args.hidden
     n_layers = args.layers
     dropout_ratio = args.dropout
+    bidirectional = args.bidirectional
     gpu_id = args.gpu
     batch_size = args.batch
     out_dir = args.out
@@ -46,41 +52,44 @@ def main():
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
     """LOGGER"""
-    logging.basicConfig(level=logging.DEBUG,\
-                        #filename = out_dir + 'log.txt',\
-                        format   = "[%(asctime)s] %(message)s",\
-                        datefmt  = "%Y/%m/%d %H:%M:%S")
-    logger = getLogger("test")
-    #logger.info('logging to {0}'.format(out_dir + 'log.txt'))
-    """DATASET"""
-    # base_dir = '/Users/machida/work/yahoo/'
-    # test_src = base_dir + 'que'
-    # test_trg = base_dir + 'ans'
+    logger = getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('[%(asctime)s] %(message)s')
 
-    base_dir = '/home/lr/machida/yahoo/bestans/by_number3/'
-    test_src = base_dir + 'correct.txt.sentword'
-    test_trg = base_dir + 'correct.txt.sentword'
+    sh = logging.StreamHandler()
+    sh.setLevel(logging.INFO)
+    sh.setFormatter(formatter)
+    logger.addHandler(sh)
+
+    log_file = out_dir + 'log.txt'
+    fh = logging.FileHandler(log_file)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    logger.info('[Test start]')
+    logger.info('logging to {0}'.format(out_dir + 'log.txt'))
+    """DATASET"""
+    base_dir = '/Users/machida/work/yahoo/'
+    test_src = base_dir + 'que'
+    test_trg = base_dir + 'ans'
+
+    # base_dir = '/home/lr/machida/yahoo/bestans/by_number3/'
+    # test_src = base_dir + 'correct.txt.sentword'
+    # test_trg = base_dir + 'correct.txt.sentword'
     src = dataset.load(test_src)
     trg = dataset.load(test_trg)
-    # src = src[:6]
-    # trg = trg[:6]
-
-    # print('src')
-    # print(src)
-
 
     logger.info('test size: {0}'.format(len(src)))
     vocab = dataset.load_pickle(vocab_file)
     logger.info('vocab size: {0}'.format(len(vocab)))
-    test  = dataset.convert2label(src, trg, vocab)
-    # print('src convert')
-    # print(test)
+    test = dataset.convert2label(src, trg, vocab)
     test_iter = iterator.Iterator(test, batch_size, repeat=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
         WordEnc(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
         WordDec(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
-        SentEnc(hidden_size, n_layers, dropout_ratio),
+        SentEnc(hidden_size, n_layers, dropout_ratio, bidirectional=bidirectional),
         SentDec(hidden_size, n_layers, dropout_ratio),
         vocab['<sos>'], vocab['<eos>'], vocab['<sod>'], vocab['<eod>'],
     )
@@ -99,27 +108,11 @@ def main():
 
     for batch in test_iter:
         data = converter.convert(batch, gpu_id)
-        # print('data')
-        # print(data)
-        # print(data[0])
-        # print(type(data[0]))
+        out = model(data[0])
 
-        a = model(data[0])
-        # print('a')
-        # print(a)
-        # print('a[0]')
-        # print(a[0])
-        # outputs.append(model(data[0])[0])
-        for i, aa in enumerate(a):
+        for i, aa in enumerate(out):
             outputs.append(aa)
             golds.append(data[2][i])
-        # outputs.append(a[0])
-        # golds.append(data[2][0])
-
-    # print('outputs')
-    # print(outputs)
-    # print('golds')
-    # print(golds)
 
     def to_list(sentences):
         sentences = [sentence.tolist() for sentence in sentences]
@@ -145,9 +138,6 @@ def main():
     _attention_list = []
     _golds = []
     for output, gold in zip(outputs, golds):
-        # print(output)
-        # print(golds)
-        # print('aaa')
         _attention_list.append(output[1])
         output = to_list(output[0])
         output = [eos_truncate(sentence, vocab['<eos>']) for sentence in output]
@@ -161,9 +151,7 @@ def main():
         gold = [label2word(sentence, reverse_vocab) for sentence in gold]
         gold = connect_sentences(gold)
         _golds.append(gold)
-    # print('_attentino_list')
-    # print(_attention_list)
-    # print(len(_attention_list))
+
     with open(out_dir + 'hypo.txt', 'w') as f:
         print('\n'.join([' '.join(sentence) for sentence in _outputs]), file=f)
     with open(out_dir + 'refe.txt', 'w') as f:

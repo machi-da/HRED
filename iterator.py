@@ -4,15 +4,16 @@ import numpy as np
 """Todo: yieldに直す
 """
 class Iterator(chainer.dataset.Iterator):
-    def __init__(self, dataset, batch_size, repeat=True, shuffle=True, padding=False):
+    def __init__(self, dataset, batch_size, repeat=True, shuffle=True):
         self.dataset = dataset
         self.batch_size = batch_size
         self.length = len(dataset)
+        if self.length < self.batch_size:
+            raise ValueError('data_size must be larger than batch_size')
         self.iteration = 0
         self.epoch = 0
         self.is_new_epoch = False
         self.repeat = repeat
-        self.padding = padding
         self.shuffle = shuffle
         if self.shuffle:
             self.order = np.random.permutation(self.length)
@@ -27,8 +28,8 @@ class Iterator(chainer.dataset.Iterator):
         end = (self.iteration + 1) * self.batch_size % self.length
         if start >= end:
             end = self.length
-        if self.padding and start < end:
-            start = end - self.batch_size
+        # if self.padding and start < end:
+        #     start = end - self.batch_size
         data = self.get_data(start, end)
         self.iteration += 1
         epoch = self.iteration * self.batch_size // self.length
