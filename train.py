@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import configparser
 import os
 import sys
 import logging
@@ -17,6 +18,7 @@ from sent_decoder import SentDec
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('config_file')
     """model parameters"""
     parser.add_argument('--embed', type=int, default=216)
     parser.add_argument('--hidden', type=int, default=216)
@@ -37,6 +39,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    config_file = args.config_file
     """PARAMETER"""
     embed_size = args.embed
     hidden_size = args.hidden
@@ -72,18 +75,14 @@ def main():
     logger.info('[Training start]')
     logger.info('logging to {0}'.format(out_dir + 'log.txt'))
     """DATASET"""
-    base_dir = '/home/lr/machida/yahoo/sent7word50/'
-    train_src_file = base_dir + 'que_train'
-    train_trg_file = base_dir + 'ans_train'
-    valid_src_file = base_dir + 'que_valid'
-    valid_trg_file = base_dir + 'ans_valid'
+    config = configparser.ConfigParser()
+    config.read(config_file)
 
-    # base_dir = '/home/lr/machida/yahoo/summarization/'
-    base_dir = '/Users/machida/work/yahoo/'
-    train_src_file = base_dir + 'que'
-    train_trg_file = base_dir + 'ans'
-    valid_src_file = base_dir + 'que'
-    valid_trg_file = base_dir + 'ans'
+    files = config['Dataset']
+    train_src_file = files['train_src_file']
+    train_trg_file = files['train_trg_file']
+    valid_src_file = files['valid_src_file']
+    valid_trg_file = files['valid_trg_file']
 
     train_data_size = dataset.data_size(train_trg_file)
     valid_data_size = dataset.data_size(valid_trg_file)

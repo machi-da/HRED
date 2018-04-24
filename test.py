@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import configparser
 import os
 import logging
 import numpy as np
@@ -17,6 +18,7 @@ from sent_decoder import SentDec
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('config_file')
     """model parameters"""
     parser.add_argument('--embed', type=int, default=216)
     parser.add_argument('--hidden', type=int, default=216)
@@ -35,6 +37,7 @@ def parse_args():
 
 def main():
     args = parse_args()
+    config_file = args.config_file
     """PARAMETER"""
     embed_size = args.embed
     hidden_size = args.hidden
@@ -68,13 +71,12 @@ def main():
     logger.info('[Test start]')
     logger.info('logging to {0}'.format(out_dir + 'log.txt'))
     """DATASET"""
-    base_dir = '/Users/machida/work/yahoo/'
-    test_src_file = base_dir + 'que'
-    test_trg_file = base_dir + 'ans'
+    config = configparser.ConfigParser()
+    config.read(config_file)
 
-    # base_dir = '/home/lr/machida/yahoo/bestans/by_number3/'
-    # test_src_file = base_dir + 'correct.txt.sentword'
-    # test_trg_file = base_dir + 'correct.txt.sentword'
+    files = config['Dataset']
+    test_src_file = files['test_src_file']
+    test_trg_file = files['test_trg_file']
 
     test_data_size = dataset.data_size(test_src_file)
     logger.info('test size: {0}'.format(test_data_size))
