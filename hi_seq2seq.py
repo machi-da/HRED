@@ -74,13 +74,7 @@ class HiSeq2SeqModel(chainer.Chain):
             sentences.append(ys[0])
         return sentences
 
-    def generate(self, articles, limit_s=7, limit_w=100):
-        """
-        :param articles: バッチサイズ分のデータ
-        :param limit_s: センテンス上限
-        :param limit_w: ワード上限
-        :return:
-        """
+    def generate(self, articles, limit_s=7, limit_w=50):
         # 各データをエンコードする(バッチ処理)
         hs, cs, enc_ys = self.encode(articles)
 

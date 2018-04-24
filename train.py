@@ -23,8 +23,8 @@ def parse_args():
     parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--bidirectional', '-bi', action='store_true')
-    # parser.add_argument('--weightdecay', type=float, default=1.0e-6)
-    # parser.add_argument('--gradclip', type=float, default=3.0)
+    parser.add_argument('--weightdecay', type=float, default=1.0e-6)
+    parser.add_argument('--gradclip', type=float, default=3.0)
     """train details"""
     parser.add_argument('--batch', '-b', type=int, default=32)
     parser.add_argument('--epoch', '-e', type=int, default=20)
@@ -43,6 +43,8 @@ def main():
     n_layers = args.layers
     dropout_ratio = args.dropout
     bidirectional = args.bidirectional
+    gradclip = args.gradclip
+    weightdecay = args.weightdecay
     gpu_id = args.gpu
     n_epoch = args.epoch
     batch_size = args.batch
@@ -70,44 +72,31 @@ def main():
     logger.info('[Training start]')
     logger.info('logging to {0}'.format(out_dir + 'log.txt'))
     """DATASET"""
-    base_dir = '/home/lr/machida/yahoo/sentword/'
-    train_src = base_dir + 'que_best.txt.sent.word.train'
-    train_trg = base_dir + 'ans_best.txt.sent.word.train'
-    valid_src = base_dir + 'que_best.txt.sent.word.valid'
-    valid_trg = base_dir + 'ans_best.txt.sent.word.valid'
+    base_dir = '/home/lr/machida/yahoo/sent7word50/'
+    train_src_file = base_dir + 'que_train'
+    train_trg_file = base_dir + 'ans_train'
+    valid_src_file = base_dir + 'que_valid'
+    valid_trg_file = base_dir + 'ans_valid'
 
     # base_dir = '/home/lr/machida/yahoo/summarization/'
     base_dir = '/Users/machida/work/yahoo/'
-    train_src = base_dir + 'que'
-    train_trg = base_dir + 'ans'
-    valid_src = base_dir + 'que'
-    valid_trg = base_dir + 'ans'
+    train_src_file = base_dir + 'que'
+    train_trg_file = base_dir + 'ans'
+    valid_src_file = base_dir + 'que'
+    valid_trg_file = base_dir + 'ans'
 
-    src = dataset.load(train_src)
-    trg = dataset.load(train_trg)
-
-    src_valid = dataset.load(valid_src)
-    trg_valid = dataset.load(valid_trg)
-
-    # src_valid = src_valid[:10000]
-    # trg_valid = trg_valid[:10000]
-
-    # src = src[:100000]
-    # trg = trg[:100000]
-
-    logger.info('train size: {0}, valid size: {1}'.format(len(src), len(src_valid)))
+    train_data_size = dataset.data_size(train_trg_file)
+    valid_data_size = dataset.data_size(valid_trg_file)
+    logger.info('train size: {0}, valid size: {1}'.format(train_data_size, valid_data_size))
 
     logger.info('Build vocabulary')
     init_vocab = {'<unk>': 0, '<sos>': 1, '<eos>': 2, '<sod>': 3, '<eod>': 4}
-    vocab = dataset.make_vocab(src, trg, initial_vocab=init_vocab, freq=3)
+    vocab = dataset.make_vocab(train_src_file, train_trg_file, initial_vocab=init_vocab, freq=3)
     dataset.save_pickle(out_dir + 'vocab.pickle', vocab)
     logger.info('vocab size: {0}'.format(len(vocab)))
 
-    train = dataset.convert2label(src, trg, vocab)
-    valid = dataset.convert2label(src_valid, trg_valid, vocab)
-
-    train_iter = iterator.Iterator(train, batch_size, shuffle=False)
-    valid_iter = iterator.Iterator(valid, batch_size, repeat=False, shuffle=False)
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, shuffle=True)
+    valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
         WordEnc(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
@@ -117,49 +106,49 @@ def main():
         vocab['<sos>'], vocab['<eos>'], vocab['<sod>'], vocab['<eod>'])
     """OPTIMIZER"""
     optimizer = chainer.optimizers.Adam()
-    optimizer.use_cleargrads()
     optimizer.setup(model)
-    #optimizer.add_hook(chainer.optimizer.GradientClipping(gradclip))
-    #optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
+    optimizer.add_hook(chainer.optimizer.GradientClipping(gradclip))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(weightdecay))
     """GPU"""
     if gpu_id >= 0:
         logger.info('Use GPU')
         chainer.cuda.get_device_from_id(gpu_id).use()
         model.to_gpu()
     """TRAIN"""
-    count = 0
     sum_loss = 0
-    log = {}
-    while train_iter.epoch < n_epoch:
-        batch = train_iter.__next__()
-        data = converter.convert(batch, gpu_id)
-        loss = optimizer.target(*data)
-        count += 1
-        sum_loss += loss.data / len(batch)
-        optimizer.target.cleargrads()
-        loss.backward()
-        optimizer.update()
-        if train_iter.iteration % interval == 0:
-            logger.info('iteration:{0}, loss:{1}'.format(train_iter.iteration, sum_loss))
-            count = 0
-            sum_loss = 0
-        if train_iter.is_new_epoch:  # log per 1 epoch
-            chainer.serializers.save_npz(
-                out_dir + 'model_epoch_{0}.npz'.format(train_iter.epoch), model)
-            chainer.serializers.save_npz(
-                out_dir + 'optimizer_epoch{0}.npz'.format(train_iter.epoch), optimizer)
+    loss_dic = {}
+    for epoch in range(1, n_epoch + 1):
+        for i, batch in enumerate(train_iter.generate(), start=1):
+            batch = dataset.convert2label(batch, vocab)
+            data = converter.convert(batch, gpu_id)
+            loss = optimizer.target(*data)
+            sum_loss += loss.data / len(batch)
+            optimizer.target.cleargrads()
+            loss.backward()
+            optimizer.update()
+
+            if i % interval == 0:
+                logger.info('iteration:{0}, loss:{1}'.format(i, sum_loss))
+                sum_loss = 0
+
+        chainer.serializers.save_npz(
+            out_dir + 'model_epoch_{0}.npz'.format(epoch), model)
+        chainer.serializers.save_npz(
+            out_dir + 'optimizer_epoch{0}.npz'.format(epoch), optimizer)
+
         """EVALUATE"""
-        if train_iter.is_new_epoch:
-            val_loss = 0
-            valid_iter.reset()
-            for batch in valid_iter:
-                data = converter.convert(batch, gpu_id)
-                with chainer.using_config('train', False):
-                    val_loss += optimizer.target(*data).data
-            logger.info('epoch:{0}, val loss:{1}'.format(train_iter.epoch, val_loss))
-            log[train_iter.epoch] = val_loss
+        valid_loss = 0
+        for batch in valid_iter.generate():
+            batch = dataset.convert2label(batch, vocab)
+            data = converter.convert(batch, gpu_id)
+            with chainer.using_config('train', False):
+                valid_loss += optimizer.target(*data).data
+        valid_loss /= valid_data_size
+        logger.info('epoch:{0}, val loss:{1}'.format(epoch, valid_loss))
+        loss_dic[epoch] = valid_loss
+
     """MODEL SAVE"""
-    best_epoch = max(log, key=(lambda x: -log[x]))
+    best_epoch = min(loss_dic, key=(lambda x: loss_dic[x]))
     logger.info('best_epoch:{0}'.format(best_epoch))
     chainer.serializers.save_npz(out_dir + 'best_model.npz', model)
 

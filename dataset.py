@@ -17,6 +17,12 @@ def load(file_name):
     return text
 
 
+def data_size(file_name):
+    with open(file_name, 'r')as f:
+        size = sum([1 for _ in f.readlines()])
+    return size
+
+
 def load_pickle(file_name):
     with open(file_name, 'rb')as f:
         data = pickle.load(f)
@@ -28,7 +34,10 @@ def save_pickle(file_name, data):
         pickle.dump(data, f)
 
 
-def make_vocab(src, trg, initial_vocab={}, vocabsize=50000, freq=0):
+def make_vocab(src_file, trg_file, initial_vocab={}, vocabsize=50000, freq=0):
+    src = load(src_file)
+    trg = load(trg_file)
+
     vocab = copy.copy(initial_vocab)
     word_count = Counter()
     text = []
@@ -53,12 +62,13 @@ def make_vocab(src, trg, initial_vocab={}, vocabsize=50000, freq=0):
     return vocab
 
 
-def convert2label(src, trg, vocab):
+def convert2label(data, vocab):
     dataset_label = []
-    for s, t in zip(src, trg):
-        article = [_convert2label(sentence, vocab, vocab['<unk>'], eos=vocab['<eos>']) for sentence in s]
-        abstract_sos = [_convert2label(sentence, vocab, vocab['<unk>'], sos=vocab['<sos>']) for sentence in t]
-        abstract_eos = [_convert2label(sentence, vocab, vocab['<unk>'], eos=vocab['<eos>']) for sentence in t]
+    for d in data:
+        src, trg = d[0], d[1]
+        article = [_convert2label(sentence, vocab, vocab['<unk>'], eos=vocab['<eos>']) for sentence in src]
+        abstract_sos = [_convert2label(sentence, vocab, vocab['<unk>'], sos=vocab['<sos>']) for sentence in trg]
+        abstract_eos = [_convert2label(sentence, vocab, vocab['<unk>'], eos=vocab['<eos>']) for sentence in trg]
         article[-1][-1] = vocab['<eod>']
         abstract_eos[-1][-1] = vocab['<eod>']
         dataset_label.append((article, abstract_sos, abstract_eos))

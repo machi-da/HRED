@@ -23,8 +23,6 @@ def parse_args():
     parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--bidirectional', '-bi', action='store_true')
-    # parser.add_argument('--weightdecay', type=float, default=1.0e-6)
-    # parser.add_argument('--gradclip', type=float, default=3.0)
     """train details"""
     parser.add_argument('--batch', '-b', type=int, default=32)
     parser.add_argument('--gpu', '-g', type=int, default=-1)
@@ -71,20 +69,18 @@ def main():
     logger.info('logging to {0}'.format(out_dir + 'log.txt'))
     """DATASET"""
     base_dir = '/Users/machida/work/yahoo/'
-    test_src = base_dir + 'que'
-    test_trg = base_dir + 'ans'
+    test_src_file = base_dir + 'que'
+    test_trg_file = base_dir + 'ans'
 
     # base_dir = '/home/lr/machida/yahoo/bestans/by_number3/'
-    # test_src = base_dir + 'correct.txt.sentword'
-    # test_trg = base_dir + 'correct.txt.sentword'
-    src = dataset.load(test_src)
-    trg = dataset.load(test_trg)
+    # test_src_file = base_dir + 'correct.txt.sentword'
+    # test_trg_file = base_dir + 'correct.txt.sentword'
 
-    logger.info('test size: {0}'.format(len(src)))
+    test_data_size = dataset.data_size(test_src_file)
+    logger.info('test size: {0}'.format(test_data_size))
     vocab = dataset.load_pickle(vocab_file)
     logger.info('vocab size: {0}'.format(len(vocab)))
-    test = dataset.convert2label(src, trg, vocab)
-    test_iter = iterator.Iterator(test, batch_size, repeat=False, shuffle=False)
+    test_iter = iterator.Iterator(test_src_file, test_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
         WordEnc(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
@@ -103,15 +99,17 @@ def main():
     reverse_vocab = {}
     for key, value in vocab.items():
         reverse_vocab[value] = key
-    outputs = []
-    golds   = []
 
-    for batch in test_iter:
+    outputs = []
+    golds = []
+
+    for batch in test_iter.generate():
+        batch = dataset.convert2label(batch, vocab)
         data = converter.convert(batch, gpu_id)
         out = model(data[0])
 
-        for i, aa in enumerate(out):
-            outputs.append(aa)
+        for i, o in enumerate(out):
+            outputs.append(o)
             golds.append(data[2][i])
 
     def to_list(sentences):

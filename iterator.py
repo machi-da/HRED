@@ -1,49 +1,62 @@
-import chainer
-import numpy as np
+import random
 
-"""Todo: yieldに直す
-"""
-class Iterator(chainer.dataset.Iterator):
-    def __init__(self, dataset, batch_size, repeat=True, shuffle=True):
-        self.dataset = dataset
+
+class Iterator:
+    def __init__(self, src_file, trg_file, batch_size, sort=True, shuffle=True):
+        self.src_file = src_file
+        self.trg_file = trg_file
+        self.src = None
+        self.trg = None
         self.batch_size = batch_size
-        self.length = len(dataset)
-        if self.length < self.batch_size:
-            raise ValueError('data_size must be larger than batch_size')
-        self.iteration = 0
-        self.epoch = 0
-        self.is_new_epoch = False
-        self.repeat = repeat
+        self.sort = sort
         self.shuffle = shuffle
-        if self.shuffle:
-            self.order = np.random.permutation(self.length)
-        else:
-            self.order = np.arange(self.length)
-        self._previous_epoch_detail = -1.
 
-    def __next__(self):
-        if not self.repeat and self.iteration * self.batch_size >= self.length:
-            raise StopIteration
-        start = self.iteration * self.batch_size % self.length
-        end = (self.iteration + 1) * self.batch_size % self.length
-        if start >= end:
-            end = self.length
-        # if self.padding and start < end:
-        #     start = end - self.batch_size
-        data = self.get_data(start, end)
-        self.iteration += 1
-        epoch = self.iteration * self.batch_size // self.length
-        self.is_new_epoch = self.epoch < epoch
-        if self.is_new_epoch:
-            self.epoch = epoch
+    def _set(self):
+        self.src = (d for d in open(self.src_file))
+        self.trg = (d for d in open(self.trg_file))
+
+    def generate(self, batches_per_sort=10000):
+        self._set()
+        src, trg = self.src, self.trg
+        batch_size = self.batch_size
+
+        data = []
+        for x, y in zip(src, trg):
+            x_list = []
+            x = x.strip().split('|')
+            for xx in x:
+                x_list.append(xx.split(' '))
+
+            y_list = []
+            y = y.strip().split('|')
+            for yy in y:
+                y_list.append(yy.split(' '))
+
+            data.append([x_list, y_list])
+
+            if len(data) != batch_size * batches_per_sort:
+                continue
+            if self.sort:
+                data = sorted(data, key=lambda x: len(x[1]))
+            batches = [data[b * batch_size : (b + 1) * batch_size]
+                       for b in range(batches_per_sort)]
+
             if self.shuffle:
-                self.order = np.random.permutation(self.length)
-        return data
-    
-    def get_data(self, start, end):
-        return [self.dataset[index] for index in self.order[start:end]]
-    
-    def reset(self):
-        self.iteration = 0
-        self.epoch = 0
-        self.is_new_epoch = False
+                random.shuffle(batches)
+
+            for batch in batches:
+                yield batch
+
+            data = []
+
+        if len(data) != 0:
+            if self.sort:
+                data = sorted(data, key=lambda x: len(x[1]))
+            batches = [data[b * batch_size : (b + 1) * batch_size]
+                       for b in range(int(len(data) / batch_size) + 1)]
+
+            if self.shuffle:
+                random.shuffle(batches)
+
+            for batch in batches:
+                yield batch
