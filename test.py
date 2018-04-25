@@ -20,8 +20,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('config_file')
     """model parameters"""
-    parser.add_argument('--embed', type=int, default=216)
-    parser.add_argument('--hidden', type=int, default=216)
+    parser.add_argument('--embed', type=int, default=256)
+    parser.add_argument('--hidden', type=int, default=256)
     parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--bidirectional', '-bi', action='store_true')

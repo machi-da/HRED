@@ -20,8 +20,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('config_file')
     """model parameters"""
-    parser.add_argument('--embed', type=int, default=216)
-    parser.add_argument('--hidden', type=int, default=216)
+    parser.add_argument('--embed', type=int, default=256)
+    parser.add_argument('--hidden', type=int, default=256)
     parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--bidirectional', '-bi', action='store_true')
@@ -94,8 +94,8 @@ def main():
     dataset.save_pickle(out_dir + 'vocab.pickle', vocab)
     logger.info('vocab size: {0}'.format(len(vocab)))
 
-    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, shuffle=True)
-    valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, shuffle=False)
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=False)
+    valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
         WordEnc(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),

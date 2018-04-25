@@ -1,6 +1,7 @@
 import chainer
 from chainer import links as L
 from chainer import functions as F
+import sys
 
 
 class EndLoop(Exception):
@@ -26,8 +27,12 @@ class HiSeq2SeqModel(chainer.Chain):
             return self.loss(self.forward(articles, abstracts_sos), abstracts_eos)
         else:
             return self.generate(articles)
-    
+
     def loss(self, b_ys, b_ts):
+        y = F.vstack([F.vstack(ys) for ys in b_ys])
+        t = F.hstack([F.hstack(ts) for ts in b_ts])
+        loss = self.lossfun(y, t)
+        """
         loss = None
         for ys, ts in zip(b_ys, b_ts):
             for y, t in zip(ys, ts):
@@ -35,8 +40,9 @@ class HiSeq2SeqModel(chainer.Chain):
                     loss = self.lossfun(y, t)
                 else:
                     loss += self.lossfun(y, t)
+        """
         return loss
-    
+
     def forward(self, articles, abstracts):
         hs, cs, enc_ys = self.encode(articles)
         hs = F.transpose(hs, (1, 0, 2))

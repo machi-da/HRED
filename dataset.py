@@ -52,12 +52,13 @@ def make_vocab(src_file, trg_file, initial_vocab={}, vocabsize=50000, freq=0):
             text = []
 
     for w in word_count.most_common():
+        if len(vocab) >= vocabsize:
+            break
         if w[1] < freq:
             break
         if w[0] not in vocab:
             vocab[w[0]] = len(vocab)
-        if len(vocab) == vocabsize:
-            break
+
 
     return vocab
 
