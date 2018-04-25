@@ -25,8 +25,8 @@ def parse_args():
     parser.add_argument('--layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--bidirectional', '-bi', action='store_true')
-    parser.add_argument('--weightdecay', type=float, default=1.0e-6)
-    parser.add_argument('--gradclip', type=float, default=3.0)
+    parser.add_argument('--weightdecay', type=float, default=0.0001)
+    parser.add_argument('--gradclip', type=float, default=5.0)
     """train details"""
     parser.add_argument('--batch', '-b', type=int, default=32)
     parser.add_argument('--epoch', '-e', type=int, default=20)
@@ -90,11 +90,11 @@ def main():
 
     logger.info('Build vocabulary')
     init_vocab = {'<unk>': 0, '<sos>': 1, '<eos>': 2, '<sod>': 3, '<eod>': 4}
-    vocab = dataset.make_vocab(train_src_file, train_trg_file, initial_vocab=init_vocab, freq=3)
+    vocab = dataset.make_vocab(train_src_file, train_trg_file, initial_vocab=init_vocab, vocabsize=50000, freq=3)
     dataset.save_pickle(out_dir + 'vocab.pickle', vocab)
     logger.info('vocab size: {0}'.format(len(vocab)))
 
-    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=False)
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=False, reverse=True)
     valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
@@ -121,7 +121,7 @@ def main():
             batch = dataset.convert2label(batch, vocab)
             data = converter.convert(batch, gpu_id)
             loss = optimizer.target(*data)
-            sum_loss += loss.data / len(batch)
+            sum_loss += loss.data
             optimizer.target.cleargrads()
             loss.backward()
             optimizer.update()

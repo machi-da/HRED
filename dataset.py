@@ -34,7 +34,7 @@ def save_pickle(file_name, data):
         pickle.dump(data, f)
 
 
-def make_vocab(src_file, trg_file, initial_vocab={}, vocabsize=50000, freq=0):
+def make_vocab(src_file, trg_file, initial_vocab={}, vocabsize=10000, freq=0):
     src = load(src_file)
     trg = load(trg_file)
 

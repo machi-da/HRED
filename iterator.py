@@ -2,7 +2,7 @@ import random
 
 
 class Iterator:
-    def __init__(self, src_file, trg_file, batch_size, sort=True, shuffle=True):
+    def __init__(self, src_file, trg_file, batch_size, sort=True, shuffle=True, reverse=False):
         self.src_file = src_file
         self.trg_file = trg_file
         self.src = None
@@ -10,6 +10,8 @@ class Iterator:
         self.batch_size = batch_size
         self.sort = sort
         self.shuffle = shuffle
+        # reverse: True -> データの大きい順, False -> 小さい順
+        self.reverse = reverse
 
     def _set(self):
         self.src = (d for d in open(self.src_file))
@@ -37,7 +39,7 @@ class Iterator:
             if len(data) != batch_size * batches_per_sort:
                 continue
             if self.sort:
-                data = sorted(data, key=lambda x: len(x[1]))
+                data = sorted(data, key=lambda x: len(x[1]), reverse=self.reverse)
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(batches_per_sort)]
 
@@ -51,7 +53,7 @@ class Iterator:
 
         if len(data) != 0:
             if self.sort:
-                data = sorted(data, key=lambda x: len(x[1]))
+                data = sorted(data, key=lambda x: len(x[1]), reverse=self.reverse)
             # 補足: (batch_size + 1)としているのは+1しないとlen(data) == batch_sizeのとき、空listができてしまうため
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(int(len(data) / (batch_size + 1)) + 1)]
