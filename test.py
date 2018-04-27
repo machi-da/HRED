@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--batch', '-b', type=int, default=32)
     parser.add_argument('--gpu', '-g', type=int, default=-1)
     parser.add_argument('--model', '-m', type=str, required=True)
-    parser.add_argument('--vocab', '-v', type=str, required=True)
+    parser.add_argument('--vocabtype', '-v', choices=['normal', 'subword'], default='normal')
     parser.add_argument('--out', '-o', type=str, default='result/')
     args = parser.parse_args()
     return args
@@ -44,11 +44,11 @@ def main():
     n_layers = args.layers
     dropout_ratio = args.dropout
     bidirectional = args.bidirectional
-    gpu_id = args.gpu
     batch_size = args.batch
-    out_dir = args.out
-    vocab_file = args.vocab
+    gpu_id = args.gpu
     model_file = args.model
+    vocab_type = args.vocabtype
+    out_dir = args.out
     """MKDIR"""
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
@@ -80,17 +80,32 @@ def main():
 
     test_data_size = dataset.data_size(test_src_file)
     logger.info('test size: {0}'.format(test_data_size))
-    vocab = dataset.load_pickle(vocab_file)
-    logger.info('vocab size: {0}'.format(len(vocab)))
-    test_iter = iterator.Iterator(test_src_file, test_trg_file, batch_size, sort=False, shuffle=False)
+    if vocab_type == 'normal':
+        vocab = dataset.VocabNormal()
+        vocab.load_vocab(out_dir + 'src_vocab.normal.pkl', out_dir + 'trg_vocab.normal.pkl')
+        sos = vocab.src_vocab['<sos>']
+        eos = vocab.src_vocab['<eos>']
+        eod = vocab.src_vocab['<eod>']
+
+    elif vocab_type == 'subword':
+        vocab = dataset.VocabSubword()
+        vocab.load_vocab(out_dir + 'src_vocab.subword.model', out_dir + 'trg_vocab.subword.model')
+        sos = vocab.src_vocab.PieceToId('<s>')
+        eos = vocab.src_vocab.PieceToId('</s>')
+        eod = vocab.src_vocab.PieceToId('<eod>')
+
+    src_vocab_size = len(vocab.src_vocab)
+    trg_vocab_size = len(vocab.trg_vocab)
+    logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
+
+    test_iter = iterator.Iterator(test_src_file, test_trg_file, batch_size, sort=False, shuffle=False, reverse=False)
     """MODEL"""
     model = HiSeq2SeqModel(
-        WordEnc(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
-        WordDec(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
+        WordEnc(src_vocab_size, embed_size, hidden_size, n_layers, dropout_ratio),
+        WordDec(trg_vocab_size, embed_size, hidden_size, n_layers, dropout_ratio),
         SentEnc(hidden_size, n_layers, dropout_ratio, bidirectional=bidirectional),
         SentDec(hidden_size, n_layers, dropout_ratio),
-        vocab['<sos>'], vocab['<eos>'], vocab['<sod>'], vocab['<eod>'],
-    )
+        sos, eos, eod)
     chainer.serializers.load_npz(model_file, model)
     """GPU"""
     if gpu_id >= 0:
@@ -99,14 +114,15 @@ def main():
         model.to_gpu()
     """TEST"""
     reverse_vocab = {}
-    for key, value in vocab.items():
-        reverse_vocab[value] = key
+    if vocab_type == 'normal':
+        for key, value in vocab.trg_vocab.items():
+            reverse_vocab[value] = key
 
     outputs = []
     golds = []
 
     for batch in test_iter.generate():
-        batch = dataset.convert2label(batch, vocab)
+        batch = vocab.convert2label(batch)
         data = converter.convert(batch, gpu_id)
         out = model(data[0])
 
@@ -140,15 +156,23 @@ def main():
     for output, gold in zip(outputs, golds):
         _attention_list.append(output[1])
         output = to_list(output[0])
-        output = [eos_truncate(sentence, vocab['<eos>']) for sentence in output]
-        output = [eos_truncate(sentence, vocab['<eod>']) for sentence in output]
-        output = [label2word(sentence, reverse_vocab) for sentence in output]
+        output = [eos_truncate(sentence, eos) for sentence in output]
+        output = [eos_truncate(sentence, eod) for sentence in output]
+        print(output)
+        if vocab_type == 'normal':
+            output = [label2word(sentence, reverse_vocab) for sentence in output]
+        else:
+            output = [vocab.trg_vocab.DecodeIds(sentence) for sentence in output]
+            print(output)
         output = connect_sentences(output)
         _outputs.append(output)
         gold = to_list(gold)
-        gold = [eos_truncate(sentence, vocab['<eos>']) for sentence in gold]
-        gold = [eos_truncate(sentence, vocab['<eod>']) for sentence in gold]
-        gold = [label2word(sentence, reverse_vocab) for sentence in gold]
+        gold = [eos_truncate(sentence, eos) for sentence in gold]
+        gold = [eos_truncate(sentence, eod) for sentence in gold]
+        if vocab_type == 'normal':
+            gold = [label2word(sentence, reverse_vocab) for sentence in gold]
+        else:
+            gold = [vocab.trg_vocab.DecodeIds(sentence) for sentence in gold]
         gold = connect_sentences(gold)
         _golds.append(gold)
 

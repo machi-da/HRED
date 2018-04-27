@@ -32,6 +32,7 @@ def parse_args():
     parser.add_argument('--epoch', '-e', type=int, default=20)
     parser.add_argument('--interval', '-i', type=int, default=10000)
     parser.add_argument('--gpu', '-g', type=int, default=-1)
+    parser.add_argument('--vocabtype', '-v', choices=['normal', 'subword'], default='normal')
     parser.add_argument('--out', '-o', type=str, default='result/')
     args = parser.parse_args()
     return args
@@ -52,6 +53,7 @@ def main():
     n_epoch = args.epoch
     batch_size = args.batch
     interval = args.interval
+    vocab_type = args.vocabtype
     out_dir = args.out
     """MKDIR"""
     if not os.path.isdir(out_dir):
@@ -89,20 +91,38 @@ def main():
     logger.info('train size: {0}, valid size: {1}'.format(train_data_size, valid_data_size))
 
     logger.info('Build vocabulary')
-    init_vocab = {'<unk>': 0, '<sos>': 1, '<eos>': 2, '<sod>': 3, '<eod>': 4}
-    vocab = dataset.make_vocab(train_src_file, train_trg_file, initial_vocab=init_vocab, vocabsize=50000, freq=3)
-    dataset.save_pickle(out_dir + 'vocab.pickle', vocab)
-    logger.info('vocab size: {0}'.format(len(vocab)))
+    if vocab_type == 'normal':
+        vocab_size = 50000
+        init_vocab = {'<unk>': 0, '<sos>': 1, '<eos>': 2, '<eod>': 3}
+        vocab = dataset.VocabNormal()
+        vocab.make_vocab(train_src_file, train_trg_file, init_vocab, vocab_size, freq=0)
+        dataset.save_pickle(out_dir + 'src_vocab.normal.pkl', vocab.src_vocab)
+        dataset.save_pickle(out_dir + 'trg_vocab.normal.pkl', vocab.trg_vocab)
+        sos = vocab.src_vocab['<sos>']
+        eos = vocab.src_vocab['<eos>']
+        eod = vocab.src_vocab['<eod>']
 
-    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=False, reverse=True)
+    elif vocab_type == 'subword':
+        vocab_size = 100
+        vocab = dataset.VocabSubword()
+        vocab.make_vocab(train_trg_file, train_trg_file, out_dir, vocab_size)
+        sos = vocab.src_vocab.PieceToId('<s>')
+        eos = vocab.src_vocab.PieceToId('</s>')
+        eod = vocab.src_vocab.PieceToId('<eod>')
+
+    src_vocab_size = len(vocab.src_vocab)
+    trg_vocab_size = len(vocab.trg_vocab)
+    logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
+
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, shuffle=False, reverse=False)
     valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
-        WordEnc(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
-        WordDec(len(vocab), embed_size, hidden_size, n_layers, dropout_ratio),
+        WordEnc(src_vocab_size, embed_size, hidden_size, n_layers, dropout_ratio),
+        WordDec(trg_vocab_size, embed_size, hidden_size, n_layers, dropout_ratio),
         SentEnc(hidden_size, n_layers, dropout_ratio, bidirectional=bidirectional),
         SentDec(hidden_size, n_layers, dropout_ratio),
-        vocab['<sos>'], vocab['<eos>'], vocab['<sod>'], vocab['<eod>'])
+        sos, eos, eod)
     """OPTIMIZER"""
     optimizer = chainer.optimizers.Adam()
     optimizer.setup(model)
@@ -118,7 +138,7 @@ def main():
     loss_dic = {}
     for epoch in range(1, n_epoch + 1):
         for i, batch in enumerate(train_iter.generate(), start=1):
-            batch = dataset.convert2label(batch, vocab)
+            batch = vocab.convert2label(batch)
             data = converter.convert(batch, gpu_id)
             loss = optimizer.target(*data)
             sum_loss += loss.data
@@ -138,7 +158,7 @@ def main():
         """EVALUATE"""
         valid_loss = 0
         for batch in valid_iter.generate():
-            batch = dataset.convert2label(batch, vocab)
+            batch = vocab.convert2label(batch)
             data = converter.convert(batch, gpu_id)
             with chainer.using_config('train', False):
                 valid_loss += optimizer.target(*data).data

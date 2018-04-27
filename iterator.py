@@ -54,12 +54,14 @@ class Iterator:
         if len(data) != 0:
             if self.sort:
                 data = sorted(data, key=lambda x: len(x[1]), reverse=self.reverse)
-            # 補足: (batch_size + 1)としているのは+1しないとlen(data) == batch_sizeのとき、空listができてしまうため
             batches = [data[b * batch_size : (b + 1) * batch_size]
-                       for b in range(int(len(data) / (batch_size + 1)) + 1)]
+                       for b in range(int(len(data) / batch_size) + 1)]
 
             if self.shuffle:
                 random.shuffle(batches)
 
             for batch in batches:
+                # 補足: len(data) == batch_sizeのとき、batchesの最後に空listができてしまうための対策
+                if not batch:
+                    continue
                 yield batch

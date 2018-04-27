@@ -9,7 +9,7 @@ class EndLoop(Exception):
 
 
 class HiSeq2SeqModel(chainer.Chain):
-    def __init__(self,wordEnc, wordDec, sentEnc, sentDec, sos, eos, sod, eod):
+    def __init__(self,wordEnc, wordDec, sentEnc, sentDec, sos, eos, eod):
         super(HiSeq2SeqModel, self).__init__()
         with self.init_scope():
             self.wordEnc = wordEnc
@@ -19,7 +19,6 @@ class HiSeq2SeqModel(chainer.Chain):
         self.lossfun = F.softmax_cross_entropy
         self.sos_id = sos
         self.eos_id = eos
-        self.sod_id = sod
         self.eod_id = eod
 
     def __call__(self, articles, abstracts_sos=None, abstracts_eos=None):
