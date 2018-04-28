@@ -103,9 +103,9 @@ def main():
         eod = vocab.src_vocab['<eod>']
 
     elif vocab_type == 'subword':
-        vocab_size = 100
+        vocab_size = 10000
         vocab = dataset.VocabSubword()
-        vocab.make_vocab(train_trg_file, train_trg_file, out_dir, vocab_size)
+        vocab.make_vocab(train_trg_file + '.subword', train_trg_file + '.subword', out_dir, vocab_size)
         sos = vocab.src_vocab.PieceToId('<s>')
         eos = vocab.src_vocab.PieceToId('</s>')
         eod = vocab.src_vocab.PieceToId('<eod>')
@@ -114,7 +114,7 @@ def main():
     trg_vocab_size = len(vocab.trg_vocab)
     logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
 
-    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, shuffle=False, reverse=False)
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, reverse=True, shuffle=True)
     valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(

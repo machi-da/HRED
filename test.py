@@ -83,6 +83,7 @@ def main():
     if vocab_type == 'normal':
         vocab = dataset.VocabNormal()
         vocab.load_vocab(out_dir + 'src_vocab.normal.pkl', out_dir + 'trg_vocab.normal.pkl')
+        vocab.set_reverse_vocab()
         sos = vocab.src_vocab['<sos>']
         eos = vocab.src_vocab['<eos>']
         eod = vocab.src_vocab['<eod>']
@@ -98,7 +99,7 @@ def main():
     trg_vocab_size = len(vocab.trg_vocab)
     logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
 
-    test_iter = iterator.Iterator(test_src_file, test_trg_file, batch_size, sort=False, shuffle=False, reverse=False)
+    test_iter = iterator.Iterator(test_src_file, test_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
         WordEnc(src_vocab_size, embed_size, hidden_size, n_layers, dropout_ratio),
@@ -113,11 +114,6 @@ def main():
         chainer.cuda.get_device_from_id(gpu_id).use()
         model.to_gpu()
     """TEST"""
-    reverse_vocab = {}
-    if vocab_type == 'normal':
-        for key, value in vocab.trg_vocab.items():
-            reverse_vocab[value] = key
-
     outputs = []
     golds = []
 
@@ -134,10 +130,6 @@ def main():
         sentences = [sentence.tolist() for sentence in sentences]
         return sentences
 
-    def label2word(sentence, vocab):
-        sentences = [vocab.get(word, '<unk>') for word in sentence]
-        return sentences
-
     def eos_truncate(labels, eos_label):
         if eos_label in labels:
             eos_index = labels.index(eos_label)
@@ -145,10 +137,8 @@ def main():
         return labels
 
     def connect_sentences(sentences):
-        long_sentence = []
-        for sentence in sentences:
-            long_sentence.extend(sentence)
-        return long_sentence
+        sentences = '\t'.join(sentences)
+        return sentences
 
     _outputs = []
     _attention_list = []
@@ -158,28 +148,20 @@ def main():
         output = to_list(output[0])
         output = [eos_truncate(sentence, eos) for sentence in output]
         output = [eos_truncate(sentence, eod) for sentence in output]
-        print(output)
-        if vocab_type == 'normal':
-            output = [label2word(sentence, reverse_vocab) for sentence in output]
-        else:
-            output = [vocab.trg_vocab.DecodeIds(sentence) for sentence in output]
-            print(output)
+        output = [vocab.label2word(sentence) for sentence in output]
         output = connect_sentences(output)
         _outputs.append(output)
         gold = to_list(gold)
         gold = [eos_truncate(sentence, eos) for sentence in gold]
         gold = [eos_truncate(sentence, eod) for sentence in gold]
-        if vocab_type == 'normal':
-            gold = [label2word(sentence, reverse_vocab) for sentence in gold]
-        else:
-            gold = [vocab.trg_vocab.DecodeIds(sentence) for sentence in gold]
+        gold = [vocab.label2word(sentence) for sentence in gold]
         gold = connect_sentences(gold)
         _golds.append(gold)
 
     with open(out_dir + 'hypo.txt', 'w') as f:
-        print('\n'.join([' '.join(sentence) for sentence in _outputs]), file=f)
+        print('\n'.join([sentence for sentence in _outputs]), file=f)
     with open(out_dir + 'refe.txt', 'w') as f:
-        print('\n'.join([' '.join(sentence) for sentence in _golds]), file=f)
+        print('\n'.join([sentence for sentence in _golds]), file=f)
     with open(out_dir + 'attn.txt', 'w')as f:
         np.set_printoptions(precision=3)
         for i, attn in enumerate(_attention_list, start=1):

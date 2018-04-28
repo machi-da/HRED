@@ -65,6 +65,7 @@ class VocabNormal:
     def __init__(self):
         self.src_vocab = None
         self.trg_vocab = None
+        self.reverse_vocab = None
 
     def make_vocab(self, src_file, trg_file, initial_vocab, vocab_size, freq):
         self.src_vocab = make_vocab(src_file, initial_vocab, vocab_size, freq)
@@ -89,17 +90,34 @@ class VocabNormal:
             dataset_label.append((src, trg_sos, trg_eos))
         return dataset_label
 
-    def _convert2label(self, words, vocab, unk, sos=None, eos=None):
-        word_labels = [vocab[w] if w in vocab else unk for w in words]
+    def _convert2label(self, sentence, vocab, unk, sos=None, eos=None):
+        word_labels = [vocab[w] if w in vocab else unk for w in sentence]
         if sos is not None:
             word_labels.insert(0, sos)
         if eos is not None:
             word_labels.append(eos)
         return np.array(word_labels, dtype=np.int32)
 
+    def set_reverse_vocab(self):
+        reverse_vocab = {}
+        for k, v in self.trg_vocab.items():
+            reverse_vocab[v] = k
+        self.reverse_vocab = reverse_vocab
+
+    def label2word(self, sentence):
+        sentence = [self.reverse_vocab.get(word, '<unk>') for word in sentence]
+        sentence = ' '.join(sentence)
+        return sentence
+
 
 def make_vocab_sp(text_file, model_name, vocab_size):
-    args = '--control_symbols=<eod> --input={} --model_prefix={} --vocab_size={} --hard_vocab_limit=false'.format(text_file, model_name, vocab_size)
+    args = '''
+            --control_symbols=<eod> 
+            --input={} 
+            --model_prefix={} 
+            --vocab_size={} 
+            --hard_vocab_limit=false'''\
+        .format(text_file, model_name, vocab_size)
     spm.SentencePieceTrainer.Train(args)
     sp = spm.SentencePieceProcessor()
     sp.Load(model_name + '.model')
@@ -145,6 +163,9 @@ class VocabSubword:
         if eos is not None:
             word_labels.append(eos)
         return np.array(word_labels, dtype=np.int32)
+
+    def label2word(self, sentence):
+        return self.trg_vocab.DecodeIds(sentence)
 
 
 if __name__ == '__main__':

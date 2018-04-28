@@ -2,16 +2,16 @@ import random
 
 
 class Iterator:
-    def __init__(self, src_file, trg_file, batch_size, sort=True, shuffle=True, reverse=False):
+    def __init__(self, src_file, trg_file, batch_size, sort=True, reverse=False, shuffle=True):
         self.src_file = src_file
         self.trg_file = trg_file
         self.src = None
         self.trg = None
         self.batch_size = batch_size
         self.sort = sort
-        self.shuffle = shuffle
         # reverse: True -> データの大きい順, False -> 小さい順
         self.reverse = reverse
+        self.shuffle = shuffle
 
     def _set(self):
         self.src = (d for d in open(self.src_file))
