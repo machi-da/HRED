@@ -2,6 +2,7 @@
 import argparse
 import configparser
 import os
+import glob
 import logging
 import numpy as np
 from logging import getLogger
@@ -18,40 +19,23 @@ from sent_decoder import SentDec
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file')
-    """model parameters"""
-    parser.add_argument('--embed', type=int, default=256)
-    parser.add_argument('--hidden', type=int, default=256)
-    parser.add_argument('--layers', type=int, default=1)
-    parser.add_argument('--dropout', type=float, default=0.2)
-    parser.add_argument('--bidirectional', '-bi', action='store_true')
-    """train details"""
+    parser.add_argument('model_dir')
     parser.add_argument('--batch', '-b', type=int, default=32)
     parser.add_argument('--gpu', '-g', type=int, default=-1)
     parser.add_argument('--model', '-m', type=str, required=True)
-    parser.add_argument('--vocabtype', '-v', choices=['normal', 'subword'], default='normal')
-    parser.add_argument('--out', '-o', type=str, default='result/')
     args = parser.parse_args()
     return args
 
 
 def main():
     args = parse_args()
-    config_file = args.config_file
-    """PARAMETER"""
-    embed_size = args.embed
-    hidden_size = args.hidden
-    n_layers = args.layers
-    dropout_ratio = args.dropout
-    bidirectional = args.bidirectional
-    batch_size = args.batch
-    gpu_id = args.gpu
-    model_file = args.model
-    vocab_type = args.vocabtype
-    out_dir = args.out
-    """MKDIR"""
-    if not os.path.isdir(out_dir):
-        os.mkdir(out_dir)
+    model_dir = args.model_dir
+    """LOAD CONFIG FILE"""
+    config_files = glob.glob(os.path.join(model_dir, '*.ini'))
+    assert len(config_files) == 1, 'Put only one config file in the directory'
+    config_file = config_files[0]
+    config = configparser.ConfigParser()
+    config.read(config_file)
     """LOGGER"""
     logger = getLogger(__name__)
     logger.setLevel(logging.INFO)
@@ -62,27 +46,34 @@ def main():
     sh.setFormatter(formatter)
     logger.addHandler(sh)
 
-    log_file = out_dir + 'log.txt'
+    log_file = model_dir + 'log.txt'
     fh = logging.FileHandler(log_file)
     fh.setLevel(logging.INFO)
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
     logger.info('[Test start]')
-    logger.info('logging to {0}'.format(out_dir + 'log.txt'))
+    logger.info('logging to {0}'.format(log_file))
+    """PARAMATER"""
+    embed_size = int(config['Parameter']['embed_size'])
+    hidden_size = int(config['Parameter']['hidden_size'])
+    n_layers = int(config['Parameter']['layers'])
+    dropout_ratio = float(config['Parameter']['dropout'])
+    bidirectional = config['Parameter'].getboolean('bidirectional')
+    vocab_type = config['Parameter']['vocab_type']
+    """TEST DETAIL"""
+    gpu_id = args.gpu
+    batch_size = args.batch
+    model_file = args.model
     """DATASET"""
-    config = configparser.ConfigParser()
-    config.read(config_file)
-
-    files = config['Dataset']
-    test_src_file = files['test_src_file']
-    test_trg_file = files['test_trg_file']
+    test_src_file = config['Dataset']['test_src_file']
+    test_trg_file = config['Dataset']['test_trg_file']
 
     test_data_size = dataset.data_size(test_src_file)
     logger.info('test size: {0}'.format(test_data_size))
     if vocab_type == 'normal':
         vocab = dataset.VocabNormal()
-        vocab.load_vocab(out_dir + 'src_vocab.normal.pkl', out_dir + 'trg_vocab.normal.pkl')
+        vocab.load_vocab(model_dir + 'src_vocab.normal.pkl', model_dir + 'trg_vocab.normal.pkl')
         vocab.set_reverse_vocab()
         sos = vocab.src_vocab['<sos>']
         eos = vocab.src_vocab['<eos>']
@@ -90,7 +81,7 @@ def main():
 
     elif vocab_type == 'subword':
         vocab = dataset.VocabSubword()
-        vocab.load_vocab(out_dir + 'src_vocab.subword.model', out_dir + 'trg_vocab.subword.model')
+        vocab.load_vocab(model_dir + 'src_vocab.subword.model', model_dir + 'trg_vocab.subword.model')
         sos = vocab.src_vocab.PieceToId('<s>')
         eos = vocab.src_vocab.PieceToId('</s>')
         eod = vocab.src_vocab.PieceToId('<eod>')
@@ -158,11 +149,11 @@ def main():
         gold = connect_sentences(gold)
         _golds.append(gold)
 
-    with open(out_dir + 'hypo.txt', 'w') as f:
+    with open(model_dir + 'hypo.txt', 'w') as f:
         print('\n'.join([sentence for sentence in _outputs]), file=f)
-    with open(out_dir + 'refe.txt', 'w') as f:
+    with open(model_dir + 'refe.txt', 'w') as f:
         print('\n'.join([sentence for sentence in _golds]), file=f)
-    with open(out_dir + 'attn.txt', 'w')as f:
+    with open(model_dir + 'attn.txt', 'w')as f:
         np.set_printoptions(precision=3)
         for i, attn in enumerate(_attention_list, start=1):
             score = None

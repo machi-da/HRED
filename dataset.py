@@ -1,8 +1,8 @@
-import numpy as np
 import copy
-from collections import Counter
 import pickle
+import numpy as np
 import sentencepiece as spm
+from collections import Counter
 
 
 def load(file_name):
@@ -11,7 +11,7 @@ def load(file_name):
         data = f.readlines()
     for d in data:
         t = []
-        sentences = d.strip().split('|')
+        sentences = d.strip().split('|||')
         for sentence in sentences:
             t.append(sentence.split(' '))
         text.append(t)

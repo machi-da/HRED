@@ -25,12 +25,12 @@ class Iterator:
         data = []
         for x, y in zip(src, trg):
             x_list = []
-            x = x.strip().split('|')
+            x = x.strip().split('|||')
             for xx in x:
                 x_list.append(xx.split(' '))
 
             y_list = []
-            y = y.strip().split('|')
+            y = y.strip().split('|||')
             for yy in y:
                 y_list.append(yy.split(' '))
 
