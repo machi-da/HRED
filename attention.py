@@ -3,7 +3,7 @@ from chainer import links as L
 from chainer import functions as F
 
 
-class Attention:
+class Attention(chainer.Chain):
     def __init__(self):
         super(Attention, self).__init__()
 
