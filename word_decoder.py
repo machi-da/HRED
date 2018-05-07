@@ -4,7 +4,7 @@ from chainer import functions as F
 
 
 class WordDec(chainer.Chain):
-    def __init__(self, n_vocab, embed, hidden, n_layers, dropout):
+    def __init__(self, n_vocab, embed, hidden, dropout, n_layers):
         super(WordDec, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, embed)

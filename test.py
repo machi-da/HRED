@@ -15,6 +15,7 @@ from word_encoder import WordEnc
 from word_decoder import WordDec
 from sent_encoder import SentEnc
 from sent_decoder import SentDec
+from sent_vectorizer import SentVec
 
 
 def parse_args():
@@ -93,10 +94,11 @@ def main():
     test_iter = iterator.Iterator(test_src_file, test_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
-        WordEnc(src_vocab_size, embed_size, hidden_size, n_layers, dropout_ratio),
-        WordDec(trg_vocab_size, embed_size, hidden_size, n_layers, dropout_ratio),
-        SentEnc(hidden_size, n_layers, dropout_ratio, bidirectional=bidirectional),
-        SentDec(hidden_size, n_layers, dropout_ratio),
+        WordEnc(src_vocab_size, embed_size, hidden_size, dropout_ratio, n_layers=n_layers, bidirectional=bidirectional),
+        WordDec(trg_vocab_size, embed_size, hidden_size, dropout_ratio, n_layers=1),
+        SentEnc(hidden_size, dropout_ratio, n_layers=1),
+        SentDec(hidden_size, dropout_ratio, n_layers=1),
+        SentVec(hidden_size, dropout_ratio),
         sos, eos, eod)
     chainer.serializers.load_npz(model_file, model)
     """GPU"""

@@ -1,7 +1,6 @@
 import chainer
 from chainer import links as L
 from chainer import functions as F
-import sys
 
 
 class EndLoop(Exception):
@@ -9,13 +8,14 @@ class EndLoop(Exception):
 
 
 class HiSeq2SeqModel(chainer.Chain):
-    def __init__(self,wordEnc, wordDec, sentEnc, sentDec, sos, eos, eod):
+    def __init__(self,wordEnc, wordDec, sentEnc, sentDec, sentVec, sos, eos, eod):
         super(HiSeq2SeqModel, self).__init__()
         with self.init_scope():
             self.wordEnc = wordEnc
             self.wordDec = wordDec
             self.sentEnc = sentEnc
             self.sentDec = sentDec
+            self.sentVec = sentVec
         self.lossfun = F.softmax_cross_entropy
         self.sos_id = sos
         self.eos_id = eos
@@ -31,15 +31,6 @@ class HiSeq2SeqModel(chainer.Chain):
         y = F.vstack([F.vstack(ys) for ys in b_ys])
         t = F.hstack([F.hstack(ts) for ts in b_ts])
         loss = self.lossfun(y, t)
-        """
-        loss = None
-        for ys, ts in zip(b_ys, b_ts):
-            for y, t in zip(ys, ts):
-                if loss is None:
-                    loss = self.lossfun(y, t)
-                else:
-                    loss += self.lossfun(y, t)
-        """
         return loss
 
     def forward(self, articles, abstracts):
@@ -57,12 +48,14 @@ class HiSeq2SeqModel(chainer.Chain):
         """word encoder"""
         sentences_list = []
 
-        # データごとにエンコードする(articlesは文書集合)
+        # 1documentごとにencodeする(articlesは文書集合)
         for article in articles:
-            _, _, word_ys = self.wordEnc(None, None, article)
+            word_hy, _, word_ys = self.wordEnc(None, None, article)
+            sentences_list.append(self.sentVec(word_hy, word_ys))
+
             # 各文の最終ベクトルを取得 → 文ベクトル
-            sentences = F.stack([y[-1] for y in word_ys], axis=0)
-            sentences_list.append(sentences)
+            # sentences = F.stack([y[-1] for y in word_ys], axis=0)
+            # sentences_list.append(sentences)
         """sentence encoder"""
         sent_hy, sent_cy, ys = self.sentEnc(None, None, sentences_list)
         return sent_hy, sent_cy, ys
