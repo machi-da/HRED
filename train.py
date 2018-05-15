@@ -95,7 +95,10 @@ def main():
 
     elif vocab_type == 'subword':
         vocab = dataset.VocabSubword()
-        vocab.make_vocab(train_trg_file + '.subword', train_trg_file + '.subword', model_dir, vocab_size)
+        if os.path.isfile(model_dir + 'src_vocab.subword.model') and os.path.isfile(model_dir + 'trg_vocab.subword.model'):
+            vocab.load_vocab(model_dir + 'src_vocab.subword.model', model_dir + 'trg_vocab.subword.model')
+        else:
+            vocab.make_vocab(train_trg_file + '.subword', train_trg_file + '.subword', model_dir, vocab_size)
         sos = vocab.src_vocab.PieceToId('<s>')
         eos = vocab.src_vocab.PieceToId('</s>')
         eod = vocab.src_vocab.PieceToId('<eod>')
