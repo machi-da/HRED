@@ -110,14 +110,17 @@ def main():
     outputs = []
     golds = []
 
-    for batch in test_iter.generate():
+    for i, batch in enumerate(test_iter.generate(), start=1):
         batch = vocab.convert2label(batch)
         data = converter.convert(batch, gpu_id)
         out = model(data[0])
 
-        for i, o in enumerate(out):
+        for j, o in enumerate(out):
             outputs.append(o)
-            golds.append(data[2][i])
+            golds.append(data[2][j])
+
+        if i % 10 == 0:
+            logger.info('Finish: {}'.format(batch_size * i))
 
     def to_list(sentences):
         sentences = [sentence.tolist() for sentence in sentences]
@@ -151,11 +154,11 @@ def main():
         gold = connect_sentences(gold)
         _golds.append(gold)
 
-    with open(model_dir + 'hypo.txt', 'w') as f:
+    with open(model_file + '.hypo.txt', 'w') as f:
         print('\n'.join([sentence for sentence in _outputs]), file=f)
-    with open(model_dir + 'refe.txt', 'w') as f:
+    with open(model_file + '.refe.txt', 'w') as f:
         print('\n'.join([sentence for sentence in _golds]), file=f)
-    with open(model_dir + 'attn.txt', 'w')as f:
+    with open(model_file + '.attn.txt', 'w')as f:
         np.set_printoptions(precision=3)
         for i, attn in enumerate(_attention_list, start=1):
             score = None

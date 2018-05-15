@@ -47,15 +47,22 @@ class HiSeq2SeqModel(chainer.Chain):
     def encode(self, articles):
         """word encoder"""
         sentences_list = []
-
-        # 1documentごとにencodeする(articlesは文書集合)
+        sentences = []
+        split_num = []
+        # articlesの全ての文を一括でencode
+        # 文の長さをsplit_numに記録し、sentencesに全ての文のリストを作成
         for article in articles:
-            word_hy, _, word_ys = self.wordEnc(None, None, article)
-            sentences_list.append(self.sentVec(word_hy, word_ys))
+            split_num.append(len(article))
+            sentences.extend(article)
+        # 一括でencode
+        word_hy, _, word_ys = self.wordEnc(None, None, sentences)
+        # articlesの文数ごとに戻す
+        start = 0
+        for num in split_num:
+            sentences_list.append(word_hy[0][start:start+num])
+            start += num
 
-            # 各文の最終ベクトルを取得 → 文ベクトル
-            # sentences = F.stack([y[-1] for y in word_ys], axis=0)
-            # sentences_list.append(sentences)
+        # sentences_list.append(self.sentVec(word_hy, word_ys))
         """sentence encoder"""
         sent_hy, sent_cy, ys = self.sentEnc(None, None, sentences_list)
         return sent_hy, sent_cy, ys

@@ -16,8 +16,8 @@ class SentVec(chainer.Chain):
         hy = F.reshape(hy, hy.shape[1:])
         for h, y in zip(hy, ys):
             '''
-            最後の隠れ状態h:(1, hidden_size)と各単語y:(単語数, hidden_size)とで要素積をとる
-            broadcast: (1, hidden_size) -> (単語数, hidden_size)
+            各文に対して、最後の隠れ状態h:(1, hidden_size)とその単語y:(単語数, hidden_size)とで要素積をとる
+            broadcast_to: (1, hidden_size) -> (単語数, hidden_size)
             sum: (単語数, hidden_size) -> (hidden_size, )
             '''
             h = F.broadcast_to(h, y.shape)

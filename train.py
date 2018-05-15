@@ -66,6 +66,7 @@ def main():
     gradclip = float(config['Parameter']['gradclip'])
     bidirectional = config['Parameter'].getboolean('bidirectional')
     vocab_type = config['Parameter']['vocab_type']
+    vocab_size = int(config['Parameter']['vocab_size'])
     """TRINING DETAIL"""
     gpu_id = args.gpu
     n_epoch = args.epoch
@@ -83,7 +84,6 @@ def main():
 
     logger.info('Build vocabulary')
     if vocab_type == 'normal':
-        vocab_size = 50000
         init_vocab = {'<unk>': 0, '<sos>': 1, '<eos>': 2, '<eod>': 3}
         vocab = dataset.VocabNormal()
         vocab.make_vocab(train_src_file, train_trg_file, init_vocab, vocab_size, freq=0)
@@ -94,7 +94,6 @@ def main():
         eod = vocab.src_vocab['<eod>']
 
     elif vocab_type == 'subword':
-        vocab_size = 10000
         vocab = dataset.VocabSubword()
         vocab.make_vocab(train_trg_file + '.subword', train_trg_file + '.subword', model_dir, vocab_size)
         sos = vocab.src_vocab.PieceToId('<s>')
@@ -106,6 +105,7 @@ def main():
     logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
 
     train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, reverse=True, shuffle=True)
+    # train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, reverse=False, shuffle=False)
     valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
@@ -141,7 +141,6 @@ def main():
             if i % interval == 0:
                 logger.info('iteration:{0}, loss:{1}'.format(i, sum_loss))
                 sum_loss = 0
-
         chainer.serializers.save_npz(
             model_dir + 'model_epoch_{0}.npz'.format(epoch), model)
         chainer.serializers.save_npz(
