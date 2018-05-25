@@ -20,9 +20,11 @@ class WordEnc(chainer.Chain):
         hy, cy, ys = self.Nlstm(hx, cx, xs_embed)
 
         if self.bidirectional:
-            hy = F.reshape(F.sum(hy, axis=0), (1, -1, self.hidden))
-            cy = F.reshape(F.sum(cy, axis=0), (1, -1, self.hidden))
-
+            hy = F.sum(hy, axis=0)
+            cy = F.sum(cy, axis=0)
             ys = [F.sum(F.reshape(y, (-1, 2, self.hidden)), axis=1) for y in ys]
+        else:
+            hy = F.reshape(hy, (-1, self.hidden))
+            cy = F.reshape(cy, (-1, self.hidden))
 
         return hy, cy, ys

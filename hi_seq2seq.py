@@ -8,7 +8,7 @@ class EndLoop(Exception):
 
 
 class HiSeq2SeqModel(chainer.Chain):
-    def __init__(self,wordEnc, wordDec, sentEnc, sentDec, sentVec, sos, eos, eod):
+    def __init__(self, wordEnc, wordDec, sentEnc, sentDec, sentVec, sos, eos, eod):
         super(HiSeq2SeqModel, self).__init__()
         with self.init_scope():
             self.wordEnc = wordEnc
@@ -43,10 +43,9 @@ class HiSeq2SeqModel(chainer.Chain):
             c = F.transpose(F.reshape(c, (1, *c.shape)), (1, 0, 2))
             ys.append(self.decode(h, c, abstract, e))
         return ys
-    
+
     def encode(self, articles):
         """word encoder"""
-        sentences_list = []
         sentences = []
         split_num = []
         # articlesの全ての文を一括でencode
@@ -56,17 +55,22 @@ class HiSeq2SeqModel(chainer.Chain):
             sentences.extend(article)
         # 一括でencode
         word_hy, _, word_ys = self.wordEnc(None, None, sentences)
-        # articlesの文数ごとに戻す
+        # articlesの文数ごとにsentences_vectorにappendしていく
+        sentences_vector = []
         start = 0
         for num in split_num:
-            sentences_list.append(word_hy[0][start:start+num])
+            sentences_vector.append(word_hy[start:start+num])
             start += num
 
         # sentences_list.append(self.sentVec(word_hy, word_ys))
         """sentence encoder"""
-        sent_hy, sent_cy, ys = self.sentEnc(None, None, sentences_list)
-        return sent_hy, sent_cy, ys
-    
+        sent_hy, sent_cy, sent_ys = self.sentEnc(None, None, sentences_vector)
+
+        # sent encoderの隠れ状態をreturn
+        # return sent_hy, sent_cy, sent_ys
+        # word encodeの最終状態をreturn
+        return sent_hy, sent_cy, sentences_vector
+
     def decode(self, sent_hs, sent_cs, abstract, enc_ys):
         sentences = []
         pre_sentence = None  # sentDec内部でゼロベクトルへ変換される
