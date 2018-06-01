@@ -5,6 +5,32 @@ import sentencepiece as spm
 from collections import Counter
 
 
+def to_list(sentences):
+    sentences = [sentence.tolist() for sentence in sentences]
+    return sentences
+
+
+def eos_truncate(labels, eos_label):
+    if eos_label in labels:
+        eos_index = labels.index(eos_label)
+        labels = labels[:eos_index]
+    return labels
+
+
+def eod_truncate(labels, eod_label):
+    res = []
+    for l in labels:
+        res.append(l)
+        if eod_label in l:
+           break
+    return res
+
+
+def join_sentences(sentences):
+    sentences = '\t'.join(sentences)
+    return sentences
+
+
 def load(file_name):
     text = []
     with open(file_name)as f:
@@ -70,6 +96,7 @@ class VocabNormal:
     def make_vocab(self, src_file, trg_file, initial_vocab, vocab_size, freq):
         self.src_vocab = make_vocab(src_file, initial_vocab, vocab_size, freq)
         self.trg_vocab = make_vocab(trg_file, initial_vocab, vocab_size, freq)
+        self.set_reverse_vocab()
 
     def load_vocab(self, src_vocab_file, trg_vocab_file):
         self.src_vocab = load_pickle(src_vocab_file)
@@ -82,10 +109,9 @@ class VocabNormal:
         dataset_label = []
         for d in data:
             src, trg = d[0], d[1]
-            src = [self._convert2label(sentence, src_vocab, src_vocab['<unk>'], eos=src_vocab['<eos>']) for sentence in src]
-            trg_sos = [self._convert2label(sentence, trg_vocab, trg_vocab['<unk>'], sos=trg_vocab['<sos>']) for sentence in trg]
-            trg_eos = [self._convert2label(sentence, trg_vocab, trg_vocab['<unk>'], eos=trg_vocab['<eos>']) for sentence in trg]
-            src[-1][-1] = src_vocab['<eod>']
+            src = [self._convert2label(sentence, src_vocab, src_vocab['<unk>']) for sentence in src]
+            trg_sos = [self._convert2label(sentence, trg_vocab, trg_vocab['<unk>'], sos=trg_vocab['<s>']) for sentence in trg]
+            trg_eos = [self._convert2label(sentence, trg_vocab, trg_vocab['<unk>'], eos=trg_vocab['</s>']) for sentence in trg]
             trg_eos[-1][-1] = trg_vocab['<eod>']
             dataset_label.append((src, trg_sos, trg_eos))
         return dataset_label

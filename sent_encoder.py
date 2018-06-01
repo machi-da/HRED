@@ -4,7 +4,8 @@ from chainer import functions as F
 
 
 class SentEnc(chainer.Chain):
-    def __init__(self, hidden, dropout, n_layers):
+    def __init__(self, hidden, dropout):
+        n_layers = 1
         super(SentEnc, self).__init__()
         with self.init_scope():
             self.Nlstm = L.NStepBiLSTM(n_layers, hidden, hidden, dropout)

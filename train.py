@@ -1,16 +1,18 @@
-#!/usr/bin/env python
 import argparse
 import configparser
 import os
 import glob
 import logging
 from logging import getLogger
+import numpy as np
+np.set_printoptions(precision=3)
 
 # os.environ["CHAINER_TYPE_CHECK"] = "0"
 import chainer
 import dataset
 import converter
 import iterator
+from evaluate import Evaluate
 from hi_seq2seq import HiSeq2SeqModel
 from word_encoder import WordEnc
 from word_decoder import WordDec
@@ -55,16 +57,13 @@ def main():
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
-    logger.info('[Training start]')
-    logger.info('logging to {0}'.format(log_file))
+    logger.info('[Training start] logging to {}'.format(log_file))
     """PARAMATER"""
     embed_size = int(config['Parameter']['embed_size'])
     hidden_size = int(config['Parameter']['hidden_size'])
-    n_layers = int(config['Parameter']['layers'])
     dropout_ratio = float(config['Parameter']['dropout'])
     weight_decay = float(config['Parameter']['weight_decay'])
     gradclip = float(config['Parameter']['gradclip'])
-    bidirectional = config['Parameter'].getboolean('bidirectional')
     vocab_type = config['Parameter']['vocab_type']
     vocab_size = int(config['Parameter']['vocab_size'])
     """TRINING DETAIL"""
@@ -77,28 +76,30 @@ def main():
     train_trg_file = config['Dataset']['train_trg_file']
     valid_src_file = config['Dataset']['valid_src_file']
     valid_trg_file = config['Dataset']['valid_trg_file']
+    test_src_file  = config['Dataset']['test_src_file']
+    correct_txt_file = config['Dataset']['correct_txt_file']
 
     train_data_size = dataset.data_size(train_trg_file)
     valid_data_size = dataset.data_size(valid_trg_file)
     logger.info('train size: {0}, valid size: {1}'.format(train_data_size, valid_data_size))
 
-    logger.info('Build vocabulary')
+    # logger.info('Build vocabulary')
     if vocab_type == 'normal':
-        init_vocab = {'<unk>': 0, '<sos>': 1, '<eos>': 2, '<eod>': 3}
+        init_vocab = {'<unk>': 0, '<s>': 1, '</s>': 2, '<eod>': 3}
         vocab = dataset.VocabNormal()
         vocab.make_vocab(train_src_file, train_trg_file, init_vocab, vocab_size, freq=0)
-        dataset.save_pickle(model_dir + 'src_vocab.normal.pkl', vocab.src_vocab)
-        dataset.save_pickle(model_dir + 'trg_vocab.normal.pkl', vocab.trg_vocab)
-        sos = vocab.src_vocab['<sos>']
-        eos = vocab.src_vocab['<eos>']
+        dataset.save_pickle(model_dir + 'src_vocab.pkl', vocab.src_vocab)
+        dataset.save_pickle(model_dir + 'trg_vocab.pkl', vocab.trg_vocab)
+        sos = vocab.src_vocab['<s>']
+        eos = vocab.src_vocab['</s>']
         eod = vocab.src_vocab['<eod>']
 
     elif vocab_type == 'subword':
         vocab = dataset.VocabSubword()
-        if os.path.isfile(model_dir + 'src_vocab.subword.model') and os.path.isfile(model_dir + 'trg_vocab.subword.model'):
-            vocab.load_vocab(model_dir + 'src_vocab.subword.model', model_dir + 'trg_vocab.subword.model')
+        if os.path.isfile(model_dir + 'src_vocab.sub.model') and os.path.isfile(model_dir + 'trg_vocab.sub.model'):
+            vocab.load_vocab(model_dir + 'src_vocab.sub.model', model_dir + 'trg_vocab.sub.model')
         else:
-            vocab.make_vocab(train_trg_file + '.subword', train_trg_file + '.subword', model_dir, vocab_size)
+            vocab.make_vocab(train_trg_file + '.sub', train_trg_file + '.sub', model_dir, vocab_size)
         sos = vocab.src_vocab.PieceToId('<s>')
         eos = vocab.src_vocab.PieceToId('</s>')
         eod = vocab.src_vocab.PieceToId('<eod>')
@@ -107,15 +108,17 @@ def main():
     trg_vocab_size = len(vocab.trg_vocab)
     logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
 
-    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, reverse=True, shuffle=True)
-    # train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, reverse=False, shuffle=False)
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=True)
+    # train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, shuffle=False)
     valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
+    evaluater = Evaluate(correct_txt_file)
+    test_iter = iterator.Iterator(test_src_file, test_src_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
-        WordEnc(src_vocab_size, embed_size, hidden_size, dropout_ratio, n_layers=n_layers, bidirectional=bidirectional),
+        WordEnc(src_vocab_size, embed_size, hidden_size, dropout_ratio),
         WordDec(trg_vocab_size, embed_size, hidden_size, dropout_ratio, n_layers=1),
-        SentEnc(hidden_size, dropout_ratio, n_layers=1),
-        SentDec(hidden_size, dropout_ratio, n_layers=1),
+        SentEnc(hidden_size, dropout_ratio),
+        SentDec(hidden_size, dropout_ratio),
         SentVec(hidden_size, dropout_ratio),
         sos, eos, eod)
     """OPTIMIZER"""
@@ -144,21 +147,62 @@ def main():
             if i % interval == 0:
                 logger.info('iteration:{0}, loss:{1}'.format(i, sum_loss))
                 sum_loss = 0
-        chainer.serializers.save_npz(
-            model_dir + 'model_epoch_{0}.npz'.format(epoch), model)
-        chainer.serializers.save_npz(
-            model_dir + 'optimizer_epoch{0}.npz'.format(epoch), optimizer)
+        chainer.serializers.save_npz(model_dir + 'model_epoch_{0}.npz'.format(epoch), model)
+        # chainer.serializers.save_npz(model_dir + 'optimizer_epoch{0}.npz'.format(epoch), optimizer)
 
         """EVALUATE"""
         valid_loss = 0
         for batch in valid_iter.generate():
             batch = vocab.convert2label(batch)
             data = converter.convert(batch, gpu_id)
-            with chainer.using_config('train', False):
+            with chainer.no_backprop_mode(), chainer.using_config('train', False):
                 valid_loss += optimizer.target(*data).data
-        valid_loss /= valid_data_size
         logger.info('epoch:{0}, val loss:{1}'.format(epoch, valid_loss))
         loss_dic[epoch] = valid_loss
+
+        """TEST"""
+        output = []
+        for batch in test_iter.generate():
+            # batch: (articlesのリスト, abstracts_sosのリスト, abstracts_eosのリスト)タプル
+            batch = vocab.convert2label(batch)
+            data = converter.convert(batch, gpu_id)
+            """
+            out: [(sent, attn), (sent, attn), ...] <-バッチサイズ
+            sent: decodeされた文のリスト
+            attn: 各文のdecode時のattentionのリスト
+            """
+            with chainer.no_backprop_mode(), chainer.using_config('train', False):
+                out = model(data[0])
+            output.extend(out)
+
+        res_decode = []
+        res_attn = []
+        for o in output:
+            sent, attn = o
+            sentence = dataset.to_list(sent)
+            sentence = dataset.eod_truncate(sentence, eod)
+            sent_num = len(sentence)
+            sentence = [dataset.eos_truncate(s, eos) for s in sentence]
+            sentence = [vocab.label2word(s) for s in sentence]
+            sentence = dataset.join_sentences(sentence)
+            res_decode.append(sentence)
+            attn = np.sum(np.array(attn[:sent_num]), axis=0) / sent_num
+            res_attn.append(attn)
+
+        rank_list = evaluater.rank(res_attn)
+        single = evaluater.single(rank_list)
+        multiple = evaluater.multiple(rank_list)
+        logger.info('single precision')
+        logger.info(single[0])
+        logger.info(single[1])
+        logger.info('multiple precision')
+        logger.info(multiple[0])
+        logger.info(multiple[1])
+
+        with open(model_dir + 'model_epoch_{}.hypo'.format(epoch), 'w')as f:
+            [f.write(r + '\n') for r in res_decode]
+        with open(model_dir + 'model_epoch_{}.attn'.format(epoch), 'w')as f:
+            [f.write('{}\n'.format(r)) for r in res_attn]
 
     """MODEL SAVE"""
     best_epoch = min(loss_dic, key=(lambda x: loss_dic[x]))

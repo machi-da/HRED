@@ -15,7 +15,7 @@ class HiSeq2SeqModel(chainer.Chain):
             self.wordDec = wordDec
             self.sentEnc = sentEnc
             self.sentDec = sentDec
-            self.sentVec = sentVec
+            # self.sentVec = sentVec
         self.lossfun = F.softmax_cross_entropy
         self.sos_id = sos
         self.eos_id = eos
@@ -102,13 +102,13 @@ class HiSeq2SeqModel(chainer.Chain):
 
     def _generate(self, sent_hs, sent_cs, enc_ys, limit_s, limit_w):
         sentences = []
-        attentions = []
+        attention_list = []
         pre_sentence = None  # sentDec内部でゼロベクトルへ変換される
         try:
             for i in range(limit_s):
                 """sentence decoder"""
-                sent_hs, sent_cs, sent_ys, attention_list = self.sentDec(sent_hs, sent_cs, [pre_sentence], enc_ys)
-                attentions.append(attention_list)
+                sent_hs, sent_cs, sent_ys, attention = self.sentDec(sent_hs, sent_cs, [pre_sentence], enc_ys)
+                attention_list.append(attention)
                 """word decoder"""
                 word_hs, word_cs = sent_hs, sent_cs
                 sos = self.xp.array([self.sos_id], dtype=self.xp.int32)
@@ -128,4 +128,4 @@ class HiSeq2SeqModel(chainer.Chain):
         except EndLoop:
             sentence = self.xp.hstack(sentence[1:])
             sentences.append(sentence)
-        return sentences, attentions
+        return sentences, attention_list

@@ -2,24 +2,19 @@ import random
 
 
 class Iterator:
-    def __init__(self, src_file, trg_file, batch_size, sort=True, reverse=False, shuffle=True):
+    def __init__(self, src_file, trg_file, batch_size, sort=True, shuffle=True):
         self.src_file = src_file
         self.trg_file = trg_file
-        self.src = None
-        self.trg = None
         self.batch_size = batch_size
         self.sort = sort
-        # reverse: True -> データの大きい順, False -> 小さい順
-        self.reverse = reverse
         self.shuffle = shuffle
 
-    def _set(self):
-        self.src = (d for d in open(self.src_file))
-        self.trg = (d for d in open(self.trg_file))
+    def _load(self, file_name):
+        return (d for d in open(file_name))
 
     def generate(self, batches_per_sort=10000):
-        self._set()
-        src, trg = self.src, self.trg
+        src = self._load(self.src_file)
+        trg = self._load(self.trg_file)
         batch_size = self.batch_size
 
         data = []
@@ -39,7 +34,7 @@ class Iterator:
             if len(data) != batch_size * batches_per_sort:
                 continue
             if self.sort:
-                data = sorted(data, key=lambda x: len(x[1]), reverse=self.reverse)
+                data = sorted(data, key=lambda x: len(x[1]), reverse=True)
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(batches_per_sort)]
 
@@ -53,7 +48,7 @@ class Iterator:
 
         if len(data) != 0:
             if self.sort:
-                data = sorted(data, key=lambda x: len(x[1]), reverse=self.reverse)
+                data = sorted(data, key=lambda x: len(x[1]), reverse=True)
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(int(len(data) / batch_size) + 1)]
 
