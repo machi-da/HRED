@@ -20,21 +20,24 @@ class Iterator:
         data = []
         for x, y in zip(src, trg):
             x_list = []
+            x_len = 0
             x = x.strip().split('|||')
             for xx in x:
-                x_list.append(xx.split(' '))
+                sent = xx.split()
+                x_len += len(sent)
+                x_list.append(sent)
 
             y_list = []
             y = y.strip().split('|||')
             for yy in y:
                 y_list.append(yy.split(' '))
 
-            data.append([x_list, y_list])
+            data.append([x_list, y_list, x_len])
 
             if len(data) != batch_size * batches_per_sort:
                 continue
             if self.sort:
-                data = sorted(data, key=lambda x: len(x[1]), reverse=True)
+                data = sorted(data, key=lambda x: (len(x[0]), x[2]), reverse=True)
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(batches_per_sort)]
 
@@ -48,7 +51,7 @@ class Iterator:
 
         if len(data) != 0:
             if self.sort:
-                data = sorted(data, key=lambda x: len(x[1]), reverse=True)
+                data = sorted(data, key=lambda x: (len(x[0]), x[2]), reverse=True)
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(int(len(data) / batch_size) + 1)]
 

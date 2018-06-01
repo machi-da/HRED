@@ -156,8 +156,8 @@ class VocabSubword:
         self.trg_vocab = None
 
     def make_vocab(self, src_file, trg_file, save_dir, vocab_size):
-        self.src_vocab = make_vocab_sp(src_file, save_dir + 'src_vocab.subword', vocab_size)
-        self.trg_vocab = make_vocab_sp(trg_file, save_dir + 'trg_vocab.subword', vocab_size)
+        self.src_vocab = make_vocab_sp(src_file, save_dir + 'src_vocab.sub', vocab_size)
+        self.trg_vocab = make_vocab_sp(trg_file, save_dir + 'trg_vocab.sub', vocab_size)
 
     def load_vocab(self, src_vocab_file, trg_vocab_file):
         src_sp = spm.SentencePieceProcessor()
@@ -195,24 +195,4 @@ class VocabSubword:
 
 
 if __name__ == '__main__':
-    train, val, test = load()
-    print(len(train))
-    print(len(val))
-    print(len(test))
-    """
-    init_vocab={'<unk>':0, '<sos>':1, '<eos>':2, '<sod>':3, '<eod>':4}
-    vocab = make_vocab(train, initial_vocab=init_vocab)
-    print(len(vocab))
-    with open('vocab.pickle', 'wb') as f:
-        pickle.dump(vocab, f)
-    """
-    vocab = load_pickle('vocab.pickle')
-    print(len(vocab))
-    train = convert2label(train, vocab)
-    val   = convert2label(val,   vocab)
-    test  = convert2label(test,  vocab)
-    """
-    print(train[0][0]) #article
-    print(train[0][1]) #abstract(sos)
-    print(train[0][2]) #abstract(eos)
-    """
+    pass
