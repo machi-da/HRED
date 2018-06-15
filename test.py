@@ -9,12 +9,12 @@ import chainer
 import dataset
 import converter
 import iterator
+from evaluate import Evaluate
 from hi_seq2seq import HiSeq2SeqModel
 from word_encoder import WordEnc
 from word_decoder import WordDec
 from sent_encoder import SentEnc
 from sent_decoder import SentDec
-from sent_vectorizer import SentVec
 
 
 def parse_args():
@@ -52,22 +52,23 @@ def main():
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
-    logger.info('[Test start]')
-    logger.info('logging to {0}'.format(log_file))
+    logger.info('[Test start] logging to {}'.format(log_file))
     """PARAMATER"""
     embed_size = int(config['Parameter']['embed_size'])
     hidden_size = int(config['Parameter']['hidden_size'])
-    n_layers = int(config['Parameter']['layers'])
     dropout_ratio = float(config['Parameter']['dropout'])
-    bidirectional = config['Parameter'].getboolean('bidirectional')
     vocab_type = config['Parameter']['vocab_type']
     """TEST DETAIL"""
     gpu_id = args.gpu
     batch_size = args.batch
     model_file = args.model
+    if gpu_id >= 0:
+        xp = chainer.cuda.cupy
+    else:
+        xp = np
     """DATASET"""
     test_src_file = config['Dataset']['test_src_file']
-    test_trg_file = config['Dataset']['test_trg_file']
+    correct_txt_file = config['Dataset']['correct_txt_file']
 
     test_data_size = dataset.data_size(test_src_file)
     logger.info('test size: {0}'.format(test_data_size))
@@ -75,13 +76,13 @@ def main():
         vocab = dataset.VocabNormal()
         vocab.load_vocab(model_dir + 'src_vocab.normal.pkl', model_dir + 'trg_vocab.normal.pkl')
         vocab.set_reverse_vocab()
-        sos = vocab.src_vocab['<sos>']
-        eos = vocab.src_vocab['<eos>']
+        sos = vocab.src_vocab['<s>']
+        eos = vocab.src_vocab['</s>']
         eod = vocab.src_vocab['<eod>']
 
     elif vocab_type == 'subword':
         vocab = dataset.VocabSubword()
-        vocab.load_vocab(model_dir + 'src_vocab.subword.model', model_dir + 'trg_vocab.subword.model')
+        vocab.load_vocab(model_dir + 'src_vocab.sub.model', model_dir + 'trg_vocab.sub.model')
         sos = vocab.src_vocab.PieceToId('<s>')
         eos = vocab.src_vocab.PieceToId('</s>')
         eod = vocab.src_vocab.PieceToId('<eod>')
@@ -90,14 +91,14 @@ def main():
     trg_vocab_size = len(vocab.trg_vocab)
     logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
 
-    test_iter = iterator.Iterator(test_src_file, test_trg_file, batch_size, sort=False, shuffle=False)
+    evaluater = Evaluate(correct_txt_file)
+    test_iter = iterator.Iterator(test_src_file, test_src_file, batch_size, sort=False, shuffle=False)
     """MODEL"""
     model = HiSeq2SeqModel(
-        WordEnc(src_vocab_size, embed_size, hidden_size, dropout_ratio, n_layers=n_layers, bidirectional=bidirectional),
-        WordDec(trg_vocab_size, embed_size, hidden_size, dropout_ratio, n_layers=1),
-        SentEnc(hidden_size, dropout_ratio, n_layers=1),
-        SentDec(hidden_size, dropout_ratio, n_layers=1),
-        SentVec(hidden_size, dropout_ratio),
+        WordEnc(src_vocab_size, embed_size, hidden_size, dropout_ratio),
+        WordDec(trg_vocab_size, embed_size, hidden_size, dropout_ratio),
+        SentEnc(hidden_size, dropout_ratio),
+        SentDec(hidden_size, dropout_ratio),
         sos, eos, eod)
     chainer.serializers.load_npz(model_file, model)
     """GPU"""
@@ -106,68 +107,44 @@ def main():
         chainer.cuda.get_device_from_id(gpu_id).use()
         model.to_gpu()
     """TEST"""
-    outputs = []
-    golds = []
-
-    for i, batch in enumerate(test_iter.generate(), start=1):
+    output = []
+    for batch in test_iter.generate():
+        # batch: (articlesのリスト, abstracts_sosのリスト, abstracts_eosのリスト)タプル
         batch = vocab.convert2label(batch)
         data = converter.convert(batch, gpu_id)
-        out = model(data[0])
+        """
+        out: [(sent, attn), (sent, attn), ...] <-バッチサイズ
+        sent: decodeされた文のリスト
+        attn: 各文のdecode時のattentionのリスト
+        """
+        with chainer.no_backprop_mode(), chainer.using_config('train', False):
+            out = model.generate(data[0])
+        output.extend(out)
 
-        for j, o in enumerate(out):
-            outputs.append(o)
-            golds.append(data[2][j])
+    res_decode = []
+    res_attn = []
+    for o in output:
+        sent, attn = o
+        sentence = dataset.to_list(sent)
+        sentence = dataset.eod_truncate(sentence, eod)
+        sent_num = len(sentence)
+        sentence = [dataset.eos_truncate(s, eos) for s in sentence]
+        sentence = [vocab.label2word(s) for s in sentence]
+        sentence = dataset.join_sentences(sentence)
+        res_decode.append(sentence)
+        attn = xp.sum(xp.array(attn[:sent_num]), axis=0) / sent_num
+        res_attn.append(attn)
 
-        if i % 10 == 0:
-            logger.info('Finish: {}'.format(batch_size * i))
+    rank_list = evaluater.rank(res_attn)
+    single = evaluater.single(rank_list)
+    multiple = evaluater.multiple(rank_list)
+    logger.info('single: {} | {}'.format(single[0], single[1]))
+    logger.info('multi : {} | {}'.format(multiple[0], multiple[1]))
 
-    def to_list(sentences):
-        sentences = [sentence.tolist() for sentence in sentences]
-        return sentences
-
-    def eos_truncate(labels, eos_label):
-        if eos_label in labels:
-            eos_index = labels.index(eos_label)
-            labels = labels[:eos_index]
-        return labels
-
-    def connect_sentences(sentences):
-        sentences = '\t'.join(sentences)
-        return sentences
-
-    _outputs = []
-    _attention_list = []
-    _golds = []
-    for output, gold in zip(outputs, golds):
-        _attention_list.append(output[1])
-        output = to_list(output[0])
-        output = [eos_truncate(sentence, eos) for sentence in output]
-        output = [eos_truncate(sentence, eod) for sentence in output]
-        output = [vocab.label2word(sentence) for sentence in output]
-        output = connect_sentences(output)
-        _outputs.append(output)
-        gold = to_list(gold)
-        gold = [eos_truncate(sentence, eos) for sentence in gold]
-        gold = [eos_truncate(sentence, eod) for sentence in gold]
-        gold = [vocab.label2word(sentence) for sentence in gold]
-        gold = connect_sentences(gold)
-        _golds.append(gold)
-
-    with open(model_file + '.hypo.txt', 'w') as f:
-        print('\n'.join([sentence for sentence in _outputs]), file=f)
-    with open(model_file + '.refe.txt', 'w') as f:
-        print('\n'.join([sentence for sentence in _golds]), file=f)
-    with open(model_file + '.attn.txt', 'w')as f:
-        np.set_printoptions(precision=3)
-        for i, attn in enumerate(_attention_list, start=1):
-            score = None
-            for a in attn:
-                if score is None:
-                    score = a.copy()
-                else:
-                    score += a
-            score /= len(attn)
-            print(i, score[0], file=f)
+    with open(model_file + '.hypo_t', 'w')as f:
+        [f.write(r + '\n') for r in res_decode]
+    with open(model_file + '.attn_t', 'w')as f:
+        [f.write('{}\n'.format(r)) for r in res_attn]
 
 
 if __name__ == '__main__':

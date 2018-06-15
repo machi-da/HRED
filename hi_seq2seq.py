@@ -8,41 +8,34 @@ class EndLoop(Exception):
 
 
 class HiSeq2SeqModel(chainer.Chain):
-    def __init__(self, wordEnc, wordDec, sentEnc, sentDec, sentVec, sos, eos, eod):
+    def __init__(self, wordEnc, wordDec, sentEnc, sentDec, sos, eos, eod):
         super(HiSeq2SeqModel, self).__init__()
         with self.init_scope():
             self.wordEnc = wordEnc
             self.wordDec = wordDec
             self.sentEnc = sentEnc
             self.sentDec = sentDec
-            # self.sentVec = sentVec
-        self.lossfun = F.softmax_cross_entropy
         self.sos_id = sos
         self.eos_id = eos
         self.eod_id = eod
 
-    def __call__(self, articles, abstracts_sos=None, abstracts_eos=None):
-        if abstracts_sos is not None:
-            return self.loss(self.forward(articles, abstracts_sos), abstracts_eos)
-        else:
-            return self.generate(articles)
-
-    def loss(self, b_ys, b_ts):
-        y = F.vstack([F.vstack(ys) for ys in b_ys])
-        t = F.hstack([F.hstack(ts) for ts in b_ts])
-        loss = self.lossfun(y, t)
-        return loss
-
-    def forward(self, articles, abstracts):
+    def __call__(self, articles, abstracts_sos, abstracts_eos):
         hs, cs, enc_ys = self.encode(articles)
         hs = F.transpose(hs, (1, 0, 2))
         cs = F.transpose(cs, (1, 0, 2))
         ys = []
-        for h, c, abstract, e in zip(hs, cs, abstracts, enc_ys):
+        for h, c, abstract, e in zip(hs, cs, abstracts_sos, enc_ys):
             h = F.transpose(F.reshape(h, (1, *h.shape)), (1, 0, 2))
             c = F.transpose(F.reshape(c, (1, *c.shape)), (1, 0, 2))
             ys.append(self.decode(h, c, abstract, e))
-        return ys
+        loss = self.calc_loss(ys, abstracts_eos)
+        return loss
+
+    def calc_loss(self, b_ys, b_ts):
+        y = F.vstack([F.vstack(ys) for ys in b_ys])
+        t = F.hstack([F.hstack(ts) for ts in b_ts])
+        loss = F.softmax_cross_entropy(y, t)
+        return loss
 
     def encode(self, articles):
         """word encoder"""
@@ -62,12 +55,12 @@ class HiSeq2SeqModel(chainer.Chain):
             sentences_vector.append(word_hy[start:start+num])
             start += num
 
-        # sentences_list.append(self.sentVec(word_hy, word_ys))
         """sentence encoder"""
         sent_hy, sent_cy, sent_ys = self.sentEnc(None, None, sentences_vector)
 
         # sent encoderの隠れ状態をreturn
         # return sent_hy, sent_cy, sent_ys
+
         # word encodeの最終状態をreturn
         return sent_hy, sent_cy, sentences_vector
 

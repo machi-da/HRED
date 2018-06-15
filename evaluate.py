@@ -10,14 +10,14 @@ class Evaluate:
         attn_data = copy.deepcopy(attn_list)
         rank_list = []
         for attn, d in zip(attn_data, self.correct_data):
-            label = [int(num) for num in d.split('\t')[0].split(',')]
+            label = [int(num)-1 for num in d.split('\t')[0].split(',')]
             rank = []
-            for i in range(1, len(attn)+1):
+            for _ in range(len(attn)):
                 index = attn.argmax()
-                if i in label:
-                    rank.append((1, index))
+                if index in label:
+                    rank.append((index, True))
                 else:
-                    rank.append((0, index))
+                    rank.append((index, False))
                 attn[index] = -1
             rank_list.append(rank)
 
@@ -27,14 +27,17 @@ class Evaluate:
         score_dic = {2: [0, 0], 3: [0, 0], 4: [0, 0], 5: [0, 0], 6: [0, 0], 7: [0, 0]}
         for r in rank_list:
             sent_num = len(r)
-            correct = False
-            count = 0
+            # 正解ラベルの数: correct_num
+            count_num = 0
             for rr in r:
-                if rr[0] == 1:
-                    count += 1
-                    if rr[1] == 1:
-                        correct = True
-            if count == 1:
+                if rr[1]:
+                    count_num += 1
+            # 正解した数: correct
+            correct = 0
+            for i in range(count_num):
+                if r[i][1]:
+                    correct += 1
+            if count_num == 1:
                 score_dic[sent_num][1] += 1
                 if correct:
                     score_dic[sent_num][0] += 1
@@ -43,29 +46,30 @@ class Evaluate:
         for v in score_dic.values():
             if v[1] == 0:
                 v[1] = 1
-        num = ' '.join([str(round(v[0] / v[1], 3)) for k, v in score_dic.items()]) + ' | {}/{}'.format(t_correct, t)
-        rate = ' '.join('{}/{}'.format(v[0], v[1]) for k, v in score_dic.items()) + ' | {}'.format(round(t_correct / t, 3))
+        num = ' '.join([str(round(v[0] / v[1], 3)) for k, v in score_dic.items()]) + '\t{}'.format(round(t_correct / t, 3))
+        rate = ' '.join('{}/{}'.format(v[0], v[1]) for k, v in score_dic.items()) + '\t{}/{}'.format(t_correct, t)
         return num, rate
 
     def multiple(self, rank_list):
         score_dic = {2: [0, 0], 3: [0, 0], 4: [0, 0], 5: [0, 0], 6: [0, 0], 7: [0, 0]}
         for r in rank_list:
             sent_num = len(r)
-            correct_lit = []
+            count_num = 0
+            for rr in r:
+                if rr[1]:
+                    count_num += 1
             correct = 0
-            for i, rr in enumerate(r):
-                if rr[0] == 1:
-                    correct_lit.append(i)
-            for c in correct_lit:
-                if r[c][1] in range(1, len(correct_lit) + 1):
+            for i in range(count_num):
+                if r[i][1]:
                     correct += 1
 
             score_dic[sent_num][0] += correct
-            score_dic[sent_num][1] += len(correct_lit)
+            score_dic[sent_num][1] += count_num
+
         t_correct, t = sum([v[0] for k, v in score_dic.items()]), sum([v[1] for k, v in score_dic.items()])
         for v in score_dic.values():
             if v[1] == 0:
                 v[1] = 1
-        num = ' '.join([str(round(v[0] / v[1], 3)) for k, v in score_dic.items()]) + ' | {}/{}'.format(t_correct, t)
-        rate = ' '.join('{}/{}'.format(v[0], v[1]) for k, v in score_dic.items()) + ' | {}'.format(round(t_correct / t, 3))
+        num = ' '.join([str(round(v[0] / v[1], 3)) for k, v in score_dic.items()]) + '\t{}'.format(round(t_correct / t, 3))
+        rate = ' '.join('{}/{}'.format(v[0], v[1]) for k, v in score_dic.items()) + '\t{}/{}'.format(t_correct, t)
         return num, rate

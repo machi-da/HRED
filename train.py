@@ -18,7 +18,6 @@ from word_encoder import WordEnc
 from word_decoder import WordDec
 from sent_encoder import SentEnc
 from sent_decoder import SentDec
-from sent_vectorizer import SentVec
 
 
 def parse_args():
@@ -83,7 +82,6 @@ def main():
     valid_data_size = dataset.data_size(valid_trg_file)
     logger.info('train size: {0}, valid size: {1}'.format(train_data_size, valid_data_size))
 
-    # logger.info('Build vocabulary')
     if vocab_type == 'normal':
         init_vocab = {'<unk>': 0, '<s>': 1, '</s>': 2, '<eod>': 3}
         vocab = dataset.VocabNormal()
@@ -116,10 +114,9 @@ def main():
     """MODEL"""
     model = HiSeq2SeqModel(
         WordEnc(src_vocab_size, embed_size, hidden_size, dropout_ratio),
-        WordDec(trg_vocab_size, embed_size, hidden_size, dropout_ratio, n_layers=1),
+        WordDec(trg_vocab_size, embed_size, hidden_size, dropout_ratio),
         SentEnc(hidden_size, dropout_ratio),
         SentDec(hidden_size, dropout_ratio),
-        SentVec(hidden_size, dropout_ratio),
         sos, eos, eod)
     """OPTIMIZER"""
     optimizer = chainer.optimizers.Adam()
@@ -145,9 +142,9 @@ def main():
             optimizer.update()
 
             if i % interval == 0:
-                logger.info('iteration:{0}, loss:{1}'.format(i, sum_loss))
+                logger.info('E{} ## iteration:{}, loss:{}'.format(epoch, i, sum_loss))
                 sum_loss = 0
-        chainer.serializers.save_npz(model_dir + 'model_epoch_{0}.npz'.format(epoch), model)
+        chainer.serializers.save_npz(model_dir + 'model_epoch_{}.npz'.format(epoch), model)
         # chainer.serializers.save_npz(model_dir + 'optimizer_epoch{0}.npz'.format(epoch), optimizer)
 
         """EVALUATE"""
@@ -157,7 +154,7 @@ def main():
             data = converter.convert(batch, gpu_id)
             with chainer.no_backprop_mode(), chainer.using_config('train', False):
                 valid_loss += optimizer.target(*data).data
-        logger.info('epoch:{0}, val loss:{1}'.format(epoch, valid_loss))
+        logger.info('E{} ## val loss:{}'.format(epoch, valid_loss))
         loss_dic[epoch] = valid_loss
 
         """TEST"""
@@ -172,7 +169,7 @@ def main():
             attn: 各文のdecode時のattentionのリスト
             """
             with chainer.no_backprop_mode(), chainer.using_config('train', False):
-                out = model(data[0])
+                out = model.generate(data[0])
             output.extend(out)
 
         res_decode = []
@@ -192,17 +189,21 @@ def main():
         rank_list = evaluater.rank(res_attn)
         single = evaluater.single(rank_list)
         multiple = evaluater.multiple(rank_list)
-        logger.info('single precision')
-        logger.info(single[0])
-        logger.info(single[1])
-        logger.info('multiple precision')
-        logger.info(multiple[0])
-        logger.info(multiple[1])
+        logger.info('E{} ## precision')
+        logger.info('single: {} | {}'.format(single[0], single[1]))
+        logger.info('multi : {} | {}'.format(multiple[0], multiple[1]))
 
         with open(model_dir + 'model_epoch_{}.hypo'.format(epoch), 'w')as f:
             [f.write(r + '\n') for r in res_decode]
         with open(model_dir + 'model_epoch_{}.attn'.format(epoch), 'w')as f:
             [f.write('{}\n'.format(r)) for r in res_attn]
+        with open(model_dir + 'model_epoch_{}.prec'.format(epoch), 'w')as f:
+            f.write('single\n')
+            f.write(single[0] + '\n')
+            f.write(single[1] + '\n')
+            f.write('multiple\n')
+            f.write(multiple[0] + '\n')
+            f.write(multiple[1] + '\n')
 
     """MODEL SAVE"""
     best_epoch = min(loss_dic, key=(lambda x: loss_dic[x]))

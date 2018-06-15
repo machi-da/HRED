@@ -10,7 +10,7 @@ class SentDec(chainer.Chain):
         super(SentDec, self).__init__()
         with self.init_scope():
             self.Nlstm = L.NStepLSTM(n_layers, hidden, hidden, dropout)
-            self.W_c   = L.Linear(2*hidden, hidden)
+            self.W_c   = L.Linear(2 * hidden, hidden)
             self.attn = Attention()
         self.hidden = hidden
         self.dropout = dropout
