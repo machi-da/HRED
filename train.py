@@ -106,8 +106,8 @@ def main():
     trg_vocab_size = len(vocab.trg_vocab)
     logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
 
-    # train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=True)
-    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, shuffle=False)
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=True)
+    # train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, shuffle=False)
     valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
     evaluater = Evaluate(correct_txt_file)
     test_iter = iterator.Iterator(test_src_file, test_src_file, batch_size, sort=False, shuffle=False)
@@ -133,14 +133,10 @@ def main():
     loss_dic = {}
     for epoch in range(1, n_epoch + 1):
         for i, batch in enumerate(train_iter.generate(), start=1):
+            print(batch)
+            exit()
             batch = vocab.convert2label(batch)
             data = converter.convert(batch, gpu_id)
-            # print('data[2]')
-            # print(data[0])
-            # print(data[1])
-            # print(data[2])
-            # print(data[3])
-            # print(len(data))
             loss = optimizer.target(*data)
             sum_loss += loss.data
             optimizer.target.cleargrads()

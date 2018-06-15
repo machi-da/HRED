@@ -39,9 +39,6 @@ class Iterator:
             x_len = 0
             x = x.strip().split('|||')
             rule_flag_list = rule(x)
-            # print(rule_flag_list)
-            # print(type(rule_flag_list))
-            # exit()
 
             for xx in x:
                 sent = xx.split()
@@ -72,7 +69,7 @@ class Iterator:
 
         if len(data) != 0:
             if self.sort:
-                data = sorted(data, key=lambda x: (len(x[0]), x[2]), reverse=True)
+                data = sorted(data, key=lambda x: (len(x[0]), x[3]), reverse=True)
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(int(len(data) / batch_size) + 1)]
 
