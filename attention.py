@@ -7,12 +7,13 @@ class Attention(chainer.Chain):
     def __init__(self):
         super(Attention, self).__init__()
 
-    def __call__(self, dec_hs, enc_hs):
+    def __call__(self, dec_hs, enc_hs, rule_flag):
         """
         dec_hs: (1, hidden) decodeされた隠れ状態
         enc_hs: (文数, den) encodeした隠れ状態
         """
         score = F.matmul(dec_hs, enc_hs, False, True)
+        score += chainer.Variable(rule_flag)
         align = F.softmax(score, axis=1)
         # [[score1, score2, ...]]となっているのでdata[0]で次元を落とす
         attention = align.data[0]

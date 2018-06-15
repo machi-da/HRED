@@ -1,4 +1,20 @@
 import random
+import re
+import numpy as np
+
+pattern = re.compile(r'\?|？|を教え|か。|サイト|方法|を探し|って|知る|知って|知り')
+
+
+def rule(sentences):
+    point = 0.01
+    rule_flag_list = []
+    for sentence in sentences:
+        sentence = sentence.replace(' ', '')
+        if re.search(pattern, sentence):
+            rule_flag_list.append(point)
+        else:
+            rule_flag_list.append(0)
+    return np.array([rule_flag_list], dtype=np.float32)
 
 
 class Iterator:
@@ -22,6 +38,11 @@ class Iterator:
             x_list = []
             x_len = 0
             x = x.strip().split('|||')
+            rule_flag_list = rule(x)
+            # print(rule_flag_list)
+            # print(type(rule_flag_list))
+            # exit()
+
             for xx in x:
                 sent = xx.split()
                 x_len += len(sent)
@@ -32,12 +53,12 @@ class Iterator:
             for yy in y:
                 y_list.append(yy.split(' '))
 
-            data.append([x_list, y_list, x_len])
+            data.append([x_list, y_list, rule_flag_list, x_len])
 
             if len(data) != batch_size * batches_per_sort:
                 continue
             if self.sort:
-                data = sorted(data, key=lambda x: (len(x[0]), x[2]), reverse=True)
+                data = sorted(data, key=lambda x: (len(x[0]), x[3]), reverse=True)
             batches = [data[b * batch_size : (b + 1) * batch_size]
                        for b in range(batches_per_sort)]
 

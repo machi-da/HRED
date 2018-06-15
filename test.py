@@ -118,7 +118,7 @@ def main():
         attn: 各文のdecode時のattentionのリスト
         """
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
-            out = model.generate(data[0])
+            out = model.generate(data[0], data[3])
         output.extend(out)
 
     res_decode = []

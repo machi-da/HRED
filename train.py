@@ -106,8 +106,8 @@ def main():
     trg_vocab_size = len(vocab.trg_vocab)
     logger.info('src_vocab size: {}, trg_vocab size: {}'.format(src_vocab_size, trg_vocab_size))
 
-    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=True)
-    # train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, shuffle=False)
+    # train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=True, shuffle=True)
+    train_iter = iterator.Iterator(train_src_file, train_trg_file, batch_size, sort=False, shuffle=False)
     valid_iter = iterator.Iterator(valid_src_file, valid_trg_file, batch_size, sort=False, shuffle=False)
     evaluater = Evaluate(correct_txt_file)
     test_iter = iterator.Iterator(test_src_file, test_src_file, batch_size, sort=False, shuffle=False)
@@ -135,6 +135,12 @@ def main():
         for i, batch in enumerate(train_iter.generate(), start=1):
             batch = vocab.convert2label(batch)
             data = converter.convert(batch, gpu_id)
+            # print('data[2]')
+            # print(data[0])
+            # print(data[1])
+            # print(data[2])
+            # print(data[3])
+            # print(len(data))
             loss = optimizer.target(*data)
             sum_loss += loss.data
             optimizer.target.cleargrads()
@@ -169,7 +175,7 @@ def main():
             attn: 各文のdecode時のattentionのリスト
             """
             with chainer.no_backprop_mode(), chainer.using_config('train', False):
-                out = model.generate(data[0])
+                out = model.generate(data[0], data[3])
             output.extend(out)
 
         res_decode = []
@@ -189,7 +195,7 @@ def main():
         rank_list = evaluater.rank(res_attn)
         single = evaluater.single(rank_list)
         multiple = evaluater.multiple(rank_list)
-        logger.info('E{} ## precision')
+        logger.info('E{} ## precision'.format(epoch))
         logger.info('single: {} | {}'.format(single[0], single[1]))
         logger.info('multi : {} | {}'.format(multiple[0], multiple[1]))
 

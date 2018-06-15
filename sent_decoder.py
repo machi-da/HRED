@@ -15,13 +15,13 @@ class SentDec(chainer.Chain):
         self.hidden = hidden
         self.dropout = dropout
 
-    def __call__(self, hx, cx, xs, enc_ys):
+    def __call__(self, hx, cx, xs, enc_ys, rule_flag):
         if xs[0] is None:
             zeros = self.xp.zeros((1, self.hidden), dtype=self.xp.float32)
             xs = [chainer.Variable(zeros)]
         hy, cy, ys = self.Nlstm(hx, cx, xs)
         # ysはlistなのでys[0]でVariableを取得
         ys = ys[0]
-        cs, attention = self.attn(ys, enc_ys)
+        cs, attention = self.attn(ys, enc_ys, rule_flag)
         ys = F.tanh(self.W_c(F.dropout(F.concat((cs, ys), axis=1), self.dropout)))
         return hy, cy, ys, attention

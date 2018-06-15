@@ -19,15 +19,15 @@ class HiSeq2SeqModel(chainer.Chain):
         self.eos_id = eos
         self.eod_id = eod
 
-    def __call__(self, articles, abstracts_sos, abstracts_eos):
+    def __call__(self, articles, abstracts_sos, abstracts_eos, rule_flag_list):
         hs, cs, enc_ys = self.encode(articles)
         hs = F.transpose(hs, (1, 0, 2))
         cs = F.transpose(cs, (1, 0, 2))
         ys = []
-        for h, c, abstract, e in zip(hs, cs, abstracts_sos, enc_ys):
+        for h, c, abstract, e, r in zip(hs, cs, abstracts_sos, enc_ys, rule_flag_list):
             h = F.transpose(F.reshape(h, (1, *h.shape)), (1, 0, 2))
             c = F.transpose(F.reshape(c, (1, *c.shape)), (1, 0, 2))
-            ys.append(self.decode(h, c, abstract, e))
+            ys.append(self.decode(h, c, abstract, e, r))
         loss = self.calc_loss(ys, abstracts_eos)
         return loss
 
@@ -64,19 +64,19 @@ class HiSeq2SeqModel(chainer.Chain):
         # word encodeの最終状態をreturn
         return sent_hy, sent_cy, sentences_vector
 
-    def decode(self, sent_hs, sent_cs, abstract, enc_ys):
+    def decode(self, sent_hs, sent_cs, abstract, enc_ys, rule_flag):
         sentences = []
         pre_sentence = None  # sentDec内部でゼロベクトルへ変換される
         for sentence in abstract:
             """sentence decoder"""
-            sent_hs, sent_cs, sent_ys, _ = self.sentDec(sent_hs, sent_cs, [pre_sentence], enc_ys)
+            sent_hs, sent_cs, sent_ys, _ = self.sentDec(sent_hs, sent_cs, [pre_sentence], enc_ys, rule_flag)
             """word decoder"""
             hy, cy, ys = self.wordDec(sent_hs, sent_cs, [sentence])
             pre_sentence = hy[-1]
             sentences.append(ys[0])
         return sentences
 
-    def generate(self, articles, limit_s=7, limit_w=50):
+    def generate(self, articles, rule_flag_list, limit_s=7, limit_w=50):
         # 各データをエンコードする(バッチ処理)
         hs, cs, enc_ys = self.encode(articles)
 
@@ -86,21 +86,21 @@ class HiSeq2SeqModel(chainer.Chain):
 
         # 1データずつデコード処理(バッチ処理ではない)
         ys = []
-        for h, c, e in zip(hs, cs, enc_ys):
+        for h, c, e, r in zip(hs, cs, enc_ys, rule_flag_list):
             h = F.transpose(F.reshape(h, (1, *h.shape)), (1, 0, 2))
             c = F.transpose(F.reshape(c, (1, *c.shape)), (1, 0, 2))
 
-            ys.append(self._generate(h, c, e, limit_s, limit_w))
+            ys.append(self._generate(h, c, e, r, limit_s, limit_w))
         return ys
 
-    def _generate(self, sent_hs, sent_cs, enc_ys, limit_s, limit_w):
+    def _generate(self, sent_hs, sent_cs, enc_ys, rule_flag, limit_s, limit_w):
         sentences = []
         attention_list = []
         pre_sentence = None  # sentDec内部でゼロベクトルへ変換される
         try:
             for i in range(limit_s):
                 """sentence decoder"""
-                sent_hs, sent_cs, sent_ys, attention = self.sentDec(sent_hs, sent_cs, [pre_sentence], enc_ys)
+                sent_hs, sent_cs, sent_ys, attention = self.sentDec(sent_hs, sent_cs, [pre_sentence], enc_ys, rule_flag)
                 attention_list.append(attention)
                 """word decoder"""
                 word_hs, word_cs = sent_hs, sent_cs

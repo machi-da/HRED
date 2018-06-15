@@ -113,7 +113,7 @@ class VocabNormal:
             trg_sos = [self._convert2label(sentence, trg_vocab, trg_vocab['<unk>'], sos=trg_vocab['<s>']) for sentence in trg]
             trg_eos = [self._convert2label(sentence, trg_vocab, trg_vocab['<unk>'], eos=trg_vocab['</s>']) for sentence in trg]
             trg_eos[-1][-1] = trg_vocab['<eod>']
-            dataset_label.append((src, trg_sos, trg_eos))
+            dataset_label.append((src, trg_sos, trg_eos, d[2]))
         return dataset_label
 
     def _convert2label(self, sentence, vocab, unk, sos=None, eos=None):
@@ -179,7 +179,7 @@ class VocabSubword:
             trg_eos = [self._convert2label(' '.join(sentence), trg_sp, eos=trg_sp.PieceToId('</s>')) for sentence in trg]
             src[-1][-1] = src_sp.PieceToId('<eod>')
             trg_eos[-1][-1] = trg_sp.PieceToId('<eod>')
-            dataset_label.append((src, trg_sos, trg_eos))
+            dataset_label.append((src, trg_sos, trg_eos, d[2]))
         return dataset_label
 
     def _convert2label(self, words, sp, sos=None, eos=None):
